@@ -1,4 +1,4 @@
-# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.2
+# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.3
 
 Script chuyên biệt tự động quét **mua trứng trôi trên dòng sông** và **tự động bán trứng có chọn lọc (chỉ được bán)** cho tựa game **[👺] Ấp hoặc nứt một quả trứng** (Hatch or Crack an Egg) trên Roblox, được phát triển bởi nhóm **Get it or Lose it**.
 
@@ -22,21 +22,31 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/khahuynh963/hatch_or_
 
 ---
 
-## ✨ Tính Năng Nổi Bật V2.2
+## 💎 Danh Sách Độ Hiếm Chuẩn Theo In-Game Index (MỚI V2.3)
 
-### 💰 1. Auto Bán Trứng Chỉ Được Bán (Selective Auto Sell - MỚI V2.2)
+Script đã được cấu hình trùng khớp 100% với danh mục Index trong game:
+
+| Bậc | Tên Hiển Thị Trong Game | Tên Gốc Tiếng Anh | Mua Mặc Định | Bán Mặc Định |
+|---|---|---|---|---|
+| 1 | ⚪ **Thường** | Common | OFF | **ON** (Tự bán dọn túi) |
+| 2 | 🟢 **Không phổ biến** | Uncommon | OFF | **ON** (Tự bán dọn túi) |
+| 3 | 🔵 **Hiếm** | Rare | OFF | **ON** (Tự bán cày tiền) |
+| 4 | 🟣 **Huyền tuyệt** | Epic | **ON** | **OFF** (Khóa an toàn) |
+| 5 | 🟠 **Huyền thoại** | Legendary | **ON** | **OFF** (Khóa bảo vệ) |
+| 6 | 🔴 **Huyền thoại (Mythic)** | Mythic | **ON** | **OFF** (Khóa bảo vệ) |
+| 7 | 🌈 **Bật mí** | Secret | **ON** | **OFF** (Khóa bảo vệ) |
+| 8 | ⭐ **Giới hạn** | Limited | **ON** | **OFF** (Khóa bảo vệ) |
+
+---
+
+## ✨ Tính Năng Nổi Bật V2.3
+
+### 💰 1. Auto Bán Trứng Chỉ Được Bán (Selective Auto Sell)
 * **🎯 Chỉ Bán Các Độ Hiếm Được Phép**:
-  * Tự động quét trứng trong túi (Backpack) và trên tay nhân vật (Equipped Tools).
+  * Tự động quét trứng trong túi (`Backpack`) và trứng đang cầm trên tay (`Character`).
   * Chỉ tiến hành bán những quả trứng có độ hiếm được bạn bật cho phép bán.
-  * **🛡️ Khóa Bảo Vệ Trứng Xịn 100%**:
-    * ⚪ **Common**: Mặc định **BẬT** (Bán dọn túi)
-    * 🟢 **Uncommon**: Mặc định **BẬT** (Bán dọn túi)
-    * 🔵 **Rare**: Mặc định **BẬT** (Bán kiếm tiền)
-    * 🟣 **Epic**: Mặc định **TẮT** (Khóa an toàn)
-    * 🟠 **Legendary**: Mặc định **TẮT** (Khóa bảo vệ trứng huyền thoại)
-    * 🔴 **Mythic**: Mặc định **TẮT** (Khóa bảo vệ trứng thần thoại)
-    * 🟡 **Divine**: Mặc định **TẮT** (Khóa bảo vệ trứng thần thánh)
-    * 🌈 **Secret / Supreme**: Mặc định **TẮT** (Khóa bảo vệ trứng tối thượng)
+  * Mặc định tự động bán `Thường`, `Không phổ biến`, `Hiếm` để dọn túi và kiếm tiền.
+  * Khóa an toàn 100% không bao giờ bán `Huyền tuyệt`, `Huyền thoại`, `Bật mí`, `Giới hạn`.
 * **⚡ Cơ Chế Bán Đa Tầng Tức Thời**:
   * Tự động chạm ô Bán (Sell Pad / Sell Zone / Sell Platform).
   * Tự động bắn các Remote bán trứng an toàn (`sellegg`, `sellall`, `sellinv`).
@@ -51,8 +61,8 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/khahuynh963/hatch_or_
   * Loại trừ 100% các quả trứng nằm trong máy ấp, nest, bệ đỡ hoặc plot của người chơi khác.
   * Bỏ qua các cần gạt và nút ấp của máy (Pull Lever, Hatch, Ấp, Gạt cần).
 * **🔙 Auto Return To Base**: Tự động bay về vị trí máy ấp ban đầu sau khi mua trứng xong (0.15s), không lo bị rớt xuống nước.
-* **🎯 Mua Theo Ngưỡng Tối Thiểu (Min Rarity)**: Chọn nhanh mức độ hiếm sàn muốn mua (`Common+` đến `Secret Only`).
-* **🔘 Tùy Chọn Từng Bậc Độ Hiếm Riêng Biệt**: Cho phép tick chọn chính xác từng loại trứng muốn gom.
+* **🎯 Mua Theo Ngưỡng Tối Thiểu (Min Rarity)**: Chọn nhanh mức độ hiếm sàn muốn mua (`Thường+` đến `Giới hạn Only`).
+* **🔘 Tùy Chọn Từng Bậc Độ Hiếm Riêng Biệt**: Cho phép tick chọn chính xác từng loại trứng muốn gom theo chuẩn Index.
 * **🌐 Mua Tầm Xa Vô Hạn (Infinite Range)**: Mở khóa khoảng cách `99999` và thời gian giữ `0s Hold`.
 
 ---

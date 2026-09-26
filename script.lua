@@ -1,23 +1,25 @@
 --[[
     ===================================================================
-    🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.2
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.3
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
     Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    TÍNH NĂNG MỚI V2.2:
-    1. 💰 AUTO BÁN TRỨNG CHỈ ĐƯỢC BÁN (SELECTIVE AUTO SELL):
-       - Tự động bán trứng trong túi / cầm trên tay khi đủ điều kiện.
-       - BỘ LỌC BẢO VỆ NGHIÊM NGẶT: Chỉ bán đúng các độ hiếm được người dùng chọn (mặc định chỉ bán Common, Uncommon, Rare).
-       - Khóa an toàn 100% không bao giờ bán trứng xịn (Epic, Legendary, Mythic, Divine, Secret).
-       - Tự động kích hoạt: Remote bán + Chạm ô Sell Zone / Pad + Prompt NPC Sell + Nút bán trong GUI.
-       - Nút [💰 Bán ngay lập tức (Sell Now)] hỗ trợ bán nhanh chỉ 1 chạm.
-    2. 🌊 AUTO MUA TRỨNG TRÊN SÔNG (RIVER EGG AUTO-BUY):
-       - Chỉ dịch chuyển đúng 1 lần duy nhất cho mỗi quả trứng (Memory Blacklist).
-       - Chỉ quét trứng trên dòng sông, tuyệt đối không dịch chuyển vào máy ấp hay plot người khác.
-       - Tự động quay về chỗ cũ (Auto Return To Base) sau khi mua.
-    3. 🧪 DEBUG & TEST CÔNG CỤ TRỰC TIẾP TRÊN MENU.
+    CẬP NHẬT ĐỘ HIẾM CHÍNH XÁC THEO GAME (IN-GAME INDEX):
+    1. ⚪ Thường (Common)
+    2. 🟢 Không phổ biến (Uncommon)
+    3. 🔵 Hiếm (Rare)
+    4. 🟣 Huyền tuyệt (Epic)
+    5. 🟠 Huyền thoại (Legendary)
+    6. 🔴 Huyền thoại (Mythic)
+    7. 🌈 Bật mí (Secret)
+    8. ⭐ Giới hạn (Limited)
+
+    TÍNH NĂNG V2.3:
+    - 🌊 Auto Mua Trứng Sông theo đúng độ hiếm game (chỉ bay 1 lần/quả, không bay lung tung).
+    - 💰 Auto Bán Trứng chỉ được bán theo đúng độ hiếm game (khóa an toàn Huyền tuyệt, Huyền thoại, Bật mí, Giới hạn).
+    - 🧪 Công cụ Test & Debug dịch chuyển 1 lần trực tiếp trên menu.
     ===================================================================
 --]]
 
@@ -70,36 +72,36 @@ pcall(function()
     end
 end)
 
--- ── State Management ──
+-- ── State Management (Đúng chuẩn độ hiếm trong game) ──
 local State = {
     -- 1. River Egg Buy
     AutoBuyRiverEggs = false,
-    MinRiverRarityIndex = 4, -- Default Epic+
+    MinRiverRarityIndex = 4, -- Default Huyền tuyệt+
     AutoTpToRiverEgg = true,
     AutoReturnToBase = true, -- Tự động quay về chỗ cũ sau khi mua
     InfiniteRiverRange = true,
     BuyRarities = {
-        Common = false,
-        Uncommon = false,
-        Rare = false,
-        Epic = true,
-        Legendary = true,
-        Mythic = true,
-        Divine = true,
-        Secret = true
+        Common = false,      -- Thường
+        Uncommon = false,    -- Không phổ biến
+        Rare = false,        -- Hiếm
+        Epic = true,         -- Huyền tuyệt
+        Legendary = true,    -- Huyền thoại
+        Mythic = true,       -- Huyền thoại (Mythic)
+        Secret = true,       -- Bật mí
+        Limited = true       -- Giới hạn
     },
 
     -- 2. Selective Auto Sell (Chỉ được bán các độ hiếm chọn)
     AutoSellEggs = false,
     SellRarities = {
-        Common = true,      -- Mặc định cho phép bán
-        Uncommon = true,    -- Mặc định cho phép bán
-        Rare = true,        -- Mặc định cho phép bán
-        Epic = false,       -- Mặc định KHÓA bảo vệ
-        Legendary = false,  -- Mặc định KHÓA bảo vệ
-        Mythic = false,     -- Mặc định KHÓA bảo vệ
-        Divine = false,     -- Mặc định KHÓA bảo vệ
-        Secret = false      -- Mặc định KHÓA bảo vệ
+        Common = true,       -- Thường (Tự bán)
+        Uncommon = true,     -- Không phổ biến (Tự bán)
+        Rare = true,         -- Hiếm (Tự bán)
+        Epic = false,        -- Huyền tuyệt (Khóa an toàn)
+        Legendary = false,   -- Huyền thoại (Khóa an toàn)
+        Mythic = false,      -- Huyền thoại (Mythic) (Khóa an toàn)
+        Secret = false,      -- Bật mí (Khóa an toàn)
+        Limited = false      -- Giới hạn (Khóa an toàn)
     },
 
     -- 3. Utility
@@ -107,14 +109,14 @@ local State = {
 }
 
 local MinRarityPresets = {
-    {Name = "⚪ Tất cả (Common+)", Rank = 1},
-    {Name = "🟢 Uncommon+", Rank = 2},
-    {Name = "🔵 Rare+", Rank = 3},
-    {Name = "🟣 Epic+", Rank = 4},
-    {Name = "🟠 Legendary+", Rank = 5},
-    {Name = "🔴 Mythic+", Rank = 6},
-    {Name = "🟡 Divine+", Rank = 7},
-    {Name = "🌈 Secret / Supreme Only", Rank = 8}
+    {Name = "⚪ Thường+ (Common+)", Key = "Common", Rank = 1},
+    {Name = "🟢 Không phổ biến+", Key = "Uncommon", Rank = 2},
+    {Name = "🔵 Hiếm+", Key = "Rare", Rank = 3},
+    {Name = "🟣 Huyền tuyệt+", Key = "Epic", Rank = 4},
+    {Name = "🟠 Huyền thoại+", Key = "Legendary", Rank = 5},
+    {Name = "🔴 Huyền thoại (Mythic)+", Key = "Mythic", Rank = 6},
+    {Name = "🌈 Bật mí (Secret)+", Key = "Secret", Rank = 7},
+    {Name = "⭐ Giới hạn (Limited Only)", Key = "Limited", Rank = 8}
 }
 
 -- ── Memory System (Chống dịch chuyển lặp lại) ──
@@ -238,28 +240,40 @@ local function getExcludedContainers()
     return excluded
 end
 
--- ── Đánh giá độ hiếm của quả trứng ──
+-- ── Đánh giá độ hiếm chính xác theo Index game ──
 local function evaluateEggRarity(obj)
     local bestRank = 1
-    local bestRarityName = "Common"
+    local bestRarityKey = "Common"
+    local bestRarityName = "Thường"
 
     local function checkText(str)
         if not str then return end
         local lower = str:lower()
-        if lower:find("supreme") or lower:find("cosmic") or lower:find("secret") or lower:find("vô cực") or lower:find("tối thượng") then
-            if 8 > bestRank then bestRank = 8; bestRarityName = "Secret" end
-        elseif lower:find("divine") or lower:find("thần thánh") or lower:find("thiên thần") or lower:find("angel") then
-            if 7 > bestRank then bestRank = 7; bestRarityName = "Divine" end
-        elseif lower:find("mythic") or lower:find("thần thoại") or lower:find("dragon") or lower:find("rồng") then
-            if 6 > bestRank then bestRank = 6; bestRarityName = "Mythic" end
-        elseif lower:find("legendary") or lower:find("huyền thoại") or lower:find("golden") or lower:find("vàng") then
-            if 5 > bestRank then bestRank = 5; bestRarityName = "Legendary" end
-        elseif lower:find("epic") or lower:find("sử thi") or lower:find("tím") then
-            if 4 > bestRank then bestRank = 4; bestRarityName = "Epic" end
-        elseif lower:find("rare") or lower:find("hiếm") or lower:find("lam") then
-            if 3 > bestRank then bestRank = 3; bestRarityName = "Rare" end
-        elseif lower:find("uncommon") or lower:find("lục") then
-            if 2 > bestRank then bestRank = 2; bestRarityName = "Uncommon" end
+
+        -- 8. Giới hạn (Limited / Exclusive)
+        if lower:find("giới hạn") or lower:find("gioi han") or lower:find("limited") or lower:find("exclusive") then
+            if 8 > bestRank then bestRank = 8; bestRarityKey = "Limited"; bestRarityName = "Giới hạn" end
+        -- 7. Bật mí (Secret / Supreme)
+        elseif lower:find("bật mí") or lower:find("bat mi") or lower:find("secret") or lower:find("supreme") or lower:find("bí mật") or lower:find("tối thượng") then
+            if 7 > bestRank then bestRank = 7; bestRarityKey = "Secret"; bestRarityName = "Bật mí" end
+        -- 6. Huyền thoại (Mythic / Thần thoại)
+        elseif lower:find("mythic") or lower:find("thần thoại") or lower:find("than thoai") or lower:find("divine") or lower:find("thần thánh") then
+            if 6 > bestRank then bestRank = 6; bestRarityKey = "Mythic"; bestRarityName = "Huyền thoại (Mythic)" end
+        -- 5. Huyền thoại (Legendary)
+        elseif lower:find("huyền thoại") or lower:find("huyen thoai") or lower:find("legendary") or lower:find("golden") or lower:find("vàng") then
+            if 5 > bestRank then bestRank = 5; bestRarityKey = "Legendary"; bestRarityName = "Huyền thoại" end
+        -- 4. Huyền tuyệt (Epic)
+        elseif lower:find("huyền tuyệt") or lower:find("huyen tuyet") or lower:find("epic") or lower:find("sử thi") or lower:find("tím") then
+            if 4 > bestRank then bestRank = 4; bestRarityKey = "Epic"; bestRarityName = "Huyền tuyệt" end
+        -- 3. Hiếm (Rare)
+        elseif lower:find("hiếm") or lower:find("hiem") or lower:find("rare") or lower:find("lam") then
+            if 3 > bestRank then bestRank = 3; bestRarityKey = "Rare"; bestRarityName = "Hiếm" end
+        -- 2. Không phổ biến (Uncommon)
+        elseif lower:find("không phổ biến") or lower:find("khong pho bien") or lower:find("bất thường") or lower:find("uncommon") or lower:find("lục") then
+            if 2 > bestRank then bestRank = 2; bestRarityKey = "Uncommon"; bestRarityName = "Không phổ biến" end
+        -- 1. Thường (Common)
+        elseif lower:find("thường") or lower:find("thuong") or lower:find("common") or lower:find("phổ biến") then
+            if 1 >= bestRank then bestRank = 1; bestRarityKey = "Common"; bestRarityName = "Thường" end
         end
     end
 
@@ -286,7 +300,7 @@ local function evaluateEggRarity(obj)
         end
     end)
 
-    return bestRarityName, bestRank
+    return bestRarityKey, bestRank, bestRarityName
 end
 
 -- ── Kiểm tra nghiêm ngặt: Có đúng là trứng trên dòng sông không? ──
@@ -364,15 +378,15 @@ local function getRiverEggs()
                 local isValid, reason, part, prompt, cd = verifyRiverEgg(obj, excludedList)
                 if isValid then
                     totalEggsFound = totalEggsFound + 1
-                    local rarityName, rank = evaluateEggRarity(obj)
+                    local rKey, rank, rName = evaluateEggRarity(obj)
                     
                     if rank > highestEggRank then
                         highestEggRank = rank
-                        highestEggFound = rarityName
+                        highestEggFound = rName
                     end
 
                     local shouldBuy = false
-                    if State.BuyRarities[rarityName] then
+                    if State.BuyRarities[rKey] then
                         shouldBuy = true
                     elseif rank >= minRank then
                         shouldBuy = true
@@ -384,7 +398,8 @@ local function getRiverEggs()
                             Part = part,
                             Prompt = prompt,
                             ClickDetector = cd,
-                            Rarity = rarityName,
+                            RarityKey = rKey,
+                            RarityName = rName,
                             Rank = rank
                         })
                     end
@@ -426,16 +441,16 @@ local function buySingleRiverEgg(eggData, isManualTest)
     local originalCFrame = hrp.CFrame
     local didTeleport = false
 
-    -- 1. DỊCH CHUYỂN ĐÚNG 1 LẦN (Nếu bật TP hoặc đang bấm nút Test)
+    -- 1. DỊCH CHUYỂN ĐÚNG 1 LẦN
     if State.AutoTpToRiverEgg or isManualTest then
-        setStatus("🚀 Bay đến trứng sông: " .. obj.Name .. " [" .. eggData.Rarity .. "] (1 Lần)")
+        setStatus("🚀 Bay đến trứng sông: " .. obj.Name .. " [" .. eggData.RarityName .. "] (1 Lần)")
         
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 3.2, 0))
         didTeleport = true
         task.wait(0.12)
     else
-        setStatus("⚡ Mua từ xa: " .. obj.Name .. " [" .. eggData.Rarity .. "]")
+        setStatus("⚡ Mua từ xa: " .. obj.Name .. " [" .. eggData.RarityName .. "]")
     end
 
     -- 2. KÍCH HOẠT PROXIMITY PROMPT
@@ -475,7 +490,7 @@ local function buySingleRiverEgg(eggData, isManualTest)
         hrp.CFrame = originalCFrame
     end
 
-    setStatus("✅ ĐÃ MUA THÀNH CÔNG: " .. obj.Name .. " [" .. eggData.Rarity .. "] (Đã ghi nhớ, không dịch chuyển lại)")
+    setStatus("✅ ĐÃ MUA THÀNH CÔNG: " .. obj.Name .. " [" .. eggData.RarityName .. "] (Đã ghi nhớ, không dịch chuyển lại)")
     
     task.wait(0.25)
     isBuyingActive = false
@@ -511,12 +526,12 @@ local function getSellableItems()
         if container then
             for _, item in ipairs(container:GetChildren()) do
                 if item:IsA("Tool") or item:IsA("Model") or item:IsA("Folder") then
-                    local rarityName, rank = evaluateEggRarity(item)
-                    -- Kiểm tra nghiêm ngặt: Có nằm trong danh sách ĐƯỢC PHÉP BÁN không?
-                    if State.SellRarities[rarityName] == true then
+                    local rKey, rank, rName = evaluateEggRarity(item)
+                    if State.SellRarities[rKey] == true then
                         table.insert(sellable, {
                             Instance = item,
-                            Rarity = rarityName,
+                            RarityKey = rKey,
+                            RarityName = rName,
                             Rank = rank
                         })
                     end
@@ -568,12 +583,10 @@ local function executeSell()
     if sellRemote then
         pcall(function()
             if sellRemote:IsA("RemoteEvent") then
-                -- Bắn bán từng item cụ thể đã lọc
                 for _, sItem in ipairs(sellableItems) do
                     sellRemote:FireServer(sItem.Instance)
                     sellRemote:FireServer(sItem.Instance.Name)
                 end
-                -- Bắn bán chung
                 sellRemote:FireServer()
                 sellRemote:FireServer("Sell")
             elseif sellRemote:IsA("RemoteFunction") then
@@ -653,7 +666,7 @@ task.spawn(function()
     end
 end)
 
--- 2. Auto Sell Eggs Loop (Chạy chu kỳ 1.5 giây)
+-- 2. Auto Sell Eggs Loop
 task.spawn(function()
     while true do
         task.wait(1.5)
@@ -666,7 +679,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.2)
+-- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.3)
 -- ═══════════════════════════════════════════════════════════
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -744,7 +757,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.2"
+Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.3"
 Title.TextColor3 = Color3.fromRGB(0, 220, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 14
@@ -1052,7 +1065,7 @@ createSectionHeader("💰 AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN)", Color3.fromR
 
 createToggle("💰 Bật Auto Bán Trứng (Auto Sell)", State.AutoSellEggs, function(val)
     State.AutoSellEggs = val
-    setStatus(val and "💰 Đã BẬT Auto Bán Trứng (Chỉ bán các độ hiếm cho phép)!" or "⏸️ Đã TẮT Auto Bán Trứng.")
+    setStatus(val and "💰 Đã BẬT Auto Bán Trứng (Chỉ bán độ hiếm cho phép)!" or "⏸️ Đã TẮT Auto Bán Trứng.")
 end, Color3.fromRGB(255, 200, 0))
 
 createActionButton("💰 Bán Ngay Lập Tức (Sell Now - 1 Lần)", Color3.fromRGB(150, 100, 20), function()
@@ -1060,38 +1073,38 @@ createActionButton("💰 Bán Ngay Lập Tức (Sell Now - 1 Lần)", Color3.fro
     executeSell()
 end)
 
-createSectionHeader("🎯 DANH SÁCH CHỈ ĐƯỢC BÁN (SELL FILTERS):", Color3.fromRGB(255, 215, 0))
+createSectionHeader("🎯 ĐỘ HIẾM CHỈ ĐƯỢC BÁN (THEO GAME):", Color3.fromRGB(255, 215, 0))
 
-createToggle("⚪ Bán Common (Trứng thường)", State.SellRarities.Common, function(val)
+createToggle("⚪ Bán Thường (Common)", State.SellRarities.Common, function(val)
     State.SellRarities.Common = val
 end, Color3.fromRGB(255, 200, 0))
 
-createToggle("🟢 Bán Uncommon (Trứng lục)", State.SellRarities.Uncommon, function(val)
+createToggle("🟢 Bán Không phổ biến (Uncommon)", State.SellRarities.Uncommon, function(val)
     State.SellRarities.Uncommon = val
 end, Color3.fromRGB(255, 200, 0))
 
-createToggle("🔵 Bán Rare (Trứng hiếm)", State.SellRarities.Rare, function(val)
+createToggle("🔵 Bán Hiếm (Rare)", State.SellRarities.Rare, function(val)
     State.SellRarities.Rare = val
 end, Color3.fromRGB(255, 200, 0))
 
-createToggle("🟣 Bán Epic (Sử thi) [Khóa an toàn]", State.SellRarities.Epic, function(val)
+createToggle("🟣 Bán Huyền tuyệt (Epic) [Khóa an toàn]", State.SellRarities.Epic, function(val)
     State.SellRarities.Epic = val
 end, Color3.fromRGB(255, 70, 70))
 
-createToggle("🟠 Bán Legendary [Khóa an toàn]", State.SellRarities.Legendary, function(val)
+createToggle("🟠 Bán Huyền thoại [Khóa an toàn]", State.SellRarities.Legendary, function(val)
     State.SellRarities.Legendary = val
 end, Color3.fromRGB(255, 70, 70))
 
-createToggle("🔴 Bán Mythic [Khóa an toàn]", State.SellRarities.Mythic, function(val)
+createToggle("🔴 Bán Huyền thoại (Mythic) [Khóa an toàn]", State.SellRarities.Mythic, function(val)
     State.SellRarities.Mythic = val
 end, Color3.fromRGB(255, 70, 70))
 
-createToggle("🟡 Bán Divine [Khóa an toàn]", State.SellRarities.Divine, function(val)
-    State.SellRarities.Divine = val
+createToggle("🌈 Bán Bật mí (Secret) [Khóa an toàn]", State.SellRarities.Secret, function(val)
+    State.SellRarities.Secret = val
 end, Color3.fromRGB(255, 70, 70))
 
-createToggle("🌈 Bán Secret / Supreme [Khóa an toàn]", State.SellRarities.Secret, function(val)
-    State.SellRarities.Secret = val
+createToggle("⭐ Bán Giới hạn (Limited) [Khóa an toàn]", State.SellRarities.Limited, function(val)
+    State.SellRarities.Limited = val
 end, Color3.fromRGB(255, 70, 70))
 
 -- ═══════════════════════════════════════════════════════════
@@ -1105,7 +1118,7 @@ createActionButton("📍 Dịch Chuyển Thử Nghiệm 1 Lần (Test TP Once)",
     local eggs = getRiverEggs()
     if #eggs > 0 then
         local target = eggs[1]
-        setStatus("🎯 Tìm thấy: " .. target.Instance.Name .. " [" .. target.Rarity .. "]. Đang test...")
+        setStatus("🎯 Tìm thấy: " .. target.Instance.Name .. " [" .. target.RarityName .. "]. Đang test...")
         buySingleRiverEgg(target, true)
     else
         setStatus("⚠️ Hiện chưa có quả trứng hợp lệ nào trên sông để test!")
@@ -1123,41 +1136,41 @@ createActionButton("🗑️ Xóa Bộ Nhớ Trứng Đã Mua (Reset Memory)", Co
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- ── SECTION 4: BỘ LỌC ĐỘ HIẾM MUỐN MUA (BUY RARITY) ──
+-- ── SECTION 4: BỘ LỌC ĐỘ HIẾM MUỐN MUA (BUY FILTERS) ──
 -- ═══════════════════════════════════════════════════════════
 
-createSectionHeader("💎 CHỌN ĐỘ HIẾM MUỐN MUA (BUY FILTERS)", Color3.fromRGB(0, 230, 255))
+createSectionHeader("💎 ĐỘ HIẾM MUỐN MUA (THEO GAME)", Color3.fromRGB(0, 230, 255))
 
-createToggle("⚪ Trứng Thường (Common)", State.BuyRarities.Common, function(val)
+createToggle("⚪ Thường (Common)", State.BuyRarities.Common, function(val)
     State.BuyRarities.Common = val
 end)
 
-createToggle("🟢 Trứng Lục (Uncommon)", State.BuyRarities.Uncommon, function(val)
+createToggle("🟢 Không phổ biến (Uncommon)", State.BuyRarities.Uncommon, function(val)
     State.BuyRarities.Uncommon = val
 end)
 
-createToggle("🔵 Trứng Hiếm (Rare)", State.BuyRarities.Rare, function(val)
+createToggle("🔵 Hiếm (Rare)", State.BuyRarities.Rare, function(val)
     State.BuyRarities.Rare = val
 end)
 
-createToggle("🟣 Trứng Sử Thi (Epic)", State.BuyRarities.Epic, function(val)
+createToggle("🟣 Huyền tuyệt (Epic)", State.BuyRarities.Epic, function(val)
     State.BuyRarities.Epic = val
 end)
 
-createToggle("🟠 Trứng Huyền Thoại (Legendary)", State.BuyRarities.Legendary, function(val)
+createToggle("🟠 Huyền thoại (Legendary)", State.BuyRarities.Legendary, function(val)
     State.BuyRarities.Legendary = val
 end)
 
-createToggle("🔴 Trứng Thần Thoại (Mythic)", State.BuyRarities.Mythic, function(val)
+createToggle("🔴 Huyền thoại (Mythic)", State.BuyRarities.Mythic, function(val)
     State.BuyRarities.Mythic = val
 end)
 
-createToggle("🟡 Trứng Thần Thánh (Divine)", State.BuyRarities.Divine, function(val)
-    State.BuyRarities.Divine = val
+createToggle("🌈 Bật mí (Secret)", State.BuyRarities.Secret, function(val)
+    State.BuyRarities.Secret = val
 end)
 
-createToggle("🌈 Trứng Tối Thượng (Secret / Supreme)", State.BuyRarities.Secret, function(val)
-    State.BuyRarities.Secret = val
+createToggle("⭐ Giới hạn (Limited)", State.BuyRarities.Limited, function(val)
+    State.BuyRarities.Limited = val
 end)
 
 -- ═══════════════════════════════════════════════════════════
@@ -1170,4 +1183,4 @@ createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, functi
     State.AntiAFK = val
 end)
 
-setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.2!")
+setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.3!")
