@@ -1,20 +1,31 @@
 --[[
     ===================================================================
-    🥚 HATCH OR CRACK AN EGG! (ẤP HOẶC NỨT MỘT QUẢ TRỨNG) - FAST LOADER V2.0
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY HUB)
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
+    Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     ===================================================================
 --]]
 
 pcall(function()
     local container = (gethui and gethui()) or game:GetService("CoreGui")
-    if container and container:FindFirstChild("HatchOrCrackHubGui") then
-        container.HatchOrCrackHubGui:Destroy()
+    if container then
+        if container:FindFirstChild("HatchOrCrackRiverHubGui") then
+            container.HatchOrCrackRiverHubGui:Destroy()
+        end
+        if container:FindFirstChild("HatchOrCrackHubGui") then
+            container.HatchOrCrackHubGui:Destroy()
+        end
     end
     local pl = game:GetService("Players").LocalPlayer
-    if pl and pl:FindFirstChild("PlayerGui") and pl.PlayerGui:FindFirstChild("HatchOrCrackHubGui") then
-        pl.PlayerGui.HatchOrCrackHubGui:Destroy()
+    if pl and pl:FindFirstChild("PlayerGui") then
+        if pl.PlayerGui:FindFirstChild("HatchOrCrackRiverHubGui") then
+            pl.PlayerGui.HatchOrCrackRiverHubGui:Destroy()
+        end
+        if pl.PlayerGui:FindFirstChild("HatchOrCrackHubGui") then
+            pl.PlayerGui.HatchOrCrackHubGui:Destroy()
+        end
     end
 end)
 
