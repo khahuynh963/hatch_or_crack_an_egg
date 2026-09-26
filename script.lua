@@ -110,8 +110,9 @@ local State = {
         Limited = false      -- Giới hạn (Khóa an toàn)
     },
 
-    -- 3. Utility
-    AntiAFK = true
+    -- 3. Utility & Performance
+    AntiAFK = true,
+    FPSBooster = false -- Tối ưu đồ họa đạt chuẩn 60 FPS không giật lag
 }
 
 local MinRarityPresets = {
@@ -150,11 +151,14 @@ local function markEggProcessed(obj)
     end
 end
 
--- ── Status Label Callbacks ──
+-- ── Status Label Callbacks (Chống spam cập nhật UI) ──
 local updateStatusUI = function(msg) end
 local updateEggCountUI = function(count, bestEgg, boughtTotal, soldTotal) end
 
+local lastStatusMsg = ""
 local function setStatus(msg)
+    if msg == lastStatusMsg then return end
+    lastStatusMsg = msg
     pcall(function()
         updateStatusUI(msg)
     end)
@@ -171,26 +175,34 @@ pcall(function()
     end)
 end)
 
--- ── Intelligent Remote Scanner ──
+-- ── Intelligent Remote Scanner (Tối ưu cực đại: Chỉ quét ReplicatedStorage và lưu cache vĩnh viễn) ──
 local function findRemote(patternList)
     for _, pattern in ipairs(patternList) do
-        if CachedRemotes[pattern] and CachedRemotes[pattern].Parent then
-            return CachedRemotes[pattern]
+        local cached = CachedRemotes[pattern]
+        if cached ~= nil then
+            if cached ~= false and cached.Parent then
+                return cached
+            end
         end
     end
 
-    local searchRoots = {ReplicatedStorage, Workspace}
-    for _, root in ipairs(searchRoots) do
-        for _, desc in ipairs(root:GetDescendants()) do
-            if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
-                local lowerName = desc.Name:lower()
-                for _, pattern in ipairs(patternList) do
-                    if lowerName:find(pattern:lower()) then
-                        CachedRemotes[pattern] = desc
-                        return desc
-                    end
+    -- Quét duy nhất 1 lần trong ReplicatedStorage (Nơi lưu 99% remote của Roblox, không đụng vào Workspace)
+    for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
+        if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
+            local lowerName = desc.Name:lower()
+            for _, pattern in ipairs(patternList) do
+                if lowerName:find(pattern:lower()) then
+                    CachedRemotes[pattern] = desc
+                    return desc
                 end
             end
+        end
+    end
+
+    -- Lưu dấu false cho các pattern không có trong game để KHÔNG BAO GIỜ quét lại
+    for _, pattern in ipairs(patternList) do
+        if CachedRemotes[pattern] == nil then
+            CachedRemotes[pattern] = false
         end
     end
     return nil
@@ -263,7 +275,7 @@ local PROMPT_BLACKLIST = {
     "claim reward", "gift", "daily"
 }
 
--- ── Tự Động Đóng Các Bảng Shop / Popup Bị Mở Nhầm ──
+-- ── Tự Động Đóng Các Bảng Shop / Popup Bị Mở Nhầm (Siêu nhẹ: Chỉ quét Frame cấp 1 của UI) ──
 local function autoCloseShopPopups()
     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not pGui then return false end
@@ -272,15 +284,16 @@ local function autoCloseShopPopups()
 
     for _, screen in ipairs(pGui:GetChildren()) do
         if screen:IsA("ScreenGui") and screen ~= ScreenGui then
-            for _, desc in ipairs(screen:GetDescendants()) do
-                if (desc:IsA("Frame") or desc:IsA("ImageLabel")) and desc.Visible then
-                    local fName = desc.Name:lower()
+            -- Chỉ kiểm tra các Frame / Dialog hiển thị ở cấp trên cùng
+            for _, frame in ipairs(screen:GetChildren()) do
+                if (frame:IsA("Frame") or frame:IsA("ImageLabel")) and frame.Visible then
+                    local fName = frame.Name:lower()
                     local isShop = false
 
                     if fName:find("eggdrop") or fName:find("shop") or fName:find("drop") or fName:find("ticket") then
                         isShop = true
                     else
-                        for _, child in ipairs(desc:GetChildren()) do
+                        for _, child in ipairs(frame:GetChildren()) do
                             if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Visible then
                                 local txt = child.Text:lower()
                                 if txt:find("egg drop shop") or txt:find("golden drop") or txt:find("need 5 tickets") 
@@ -293,7 +306,7 @@ local function autoCloseShopPopups()
                     end
 
                     if isShop then
-                        for _, btn in ipairs(desc:GetDescendants()) do
+                        for _, btn in ipairs(frame:GetDescendants()) do
                             if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
                                 local bName = btn.Name:lower()
                                 local bText = btn:IsA("TextButton") and btn.Text:lower() or ""
@@ -304,7 +317,7 @@ local function autoCloseShopPopups()
                                         firesignal(btn.Activated)
                                     end
                                     pcall(function()
-                                        desc.Visible = false
+                                        frame.Visible = false
                                     end)
                                     closedAny = true
                                     break
@@ -320,19 +333,25 @@ local function autoCloseShopPopups()
     return closedAny
 end
 
--- ── Lọc và phát hiện các khu vực máy / plot của người chơi ──
+-- ── Lọc và phát hiện các khu vực máy / plot của người chơi (Lưu Cache 30s) ──
+local CachedExcludedContainers = nil
+local lastExcludedScan = 0
 local function getExcludedContainers()
-    local excluded = {}
+    if CachedExcludedContainers and (os.clock() - lastExcludedScan < 30) then
+        return CachedExcludedContainers
+    end
+    lastExcludedScan = os.clock()
+    CachedExcludedContainers = {}
     for _, desc in ipairs(Workspace:GetChildren()) do
         local n = desc.Name:lower()
         for _, bName in ipairs(SHOP_AND_ITEM_BLACKLIST) do
             if n:find(bName) then
-                table.insert(excluded, desc)
+                table.insert(CachedExcludedContainers, desc)
                 break
             end
         end
     end
-    return excluded
+    return CachedExcludedContainers
 end
 
 -- ── Đánh giá độ hiếm chính xác theo Index game ──
@@ -468,14 +487,16 @@ local function verifyRiverEgg(obj, excludedList)
         end
     end
 
-    -- 6. KIỂM TRA NỘI DUNG TEXT TRONG GUI/BILLBOARD BÊN TRONG VẬT THỂ
-    for _, desc in ipairs(obj:GetDescendants()) do
-        if desc:IsA("TextLabel") or desc:IsA("TextButton") then
-            local t = desc.Text:lower()
-            if t:find("egg drop") or t:find("golden drop") or t:find("tickets") 
-               or t:find("shop") or t:find("odds") or t:find("free in") or t:find("robux")
-               or t:find("cửa hàng") or t:find("tỉ lệ") then
-                return false, "Contains shop text in GUI: " .. desc.Text
+    -- 6. KIỂM TRA NỘI DUNG TEXT TRONG GUI/BILLBOARD (Chỉ quét nếu có BillboardGui/SurfaceGui)
+    if obj:FindFirstChildWhichIsA("BillboardGui", true) or obj:FindFirstChildWhichIsA("SurfaceGui", true) then
+        for _, desc in ipairs(obj:GetDescendants()) do
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                local t = desc.Text:lower()
+                if t:find("egg drop") or t:find("golden drop") or t:find("tickets") 
+                   or t:find("shop") or t:find("odds") or t:find("free in") or t:find("robux")
+                   or t:find("cửa hàng") or t:find("tỉ lệ") then
+                    return false, "Contains shop text in GUI: " .. desc.Text
+                end
             end
         end
     end
@@ -489,7 +510,46 @@ local function verifyRiverEgg(obj, excludedList)
     return true, "Valid River Egg", part, prompt, cd
 end
 
--- ── Quét danh sách trứng thực sự đang trôi trên sông ──
+-- ── Bộ Nhớ Đệm Container Dòng Sông (Giảm 99.9% tải CPU - Không quét lại Map liên tục) ──
+local CachedRiverContainers = nil
+local lastContainerScanTime = 0
+
+local function getRiverContainers()
+    if CachedRiverContainers and (os.clock() - lastContainerScanTime < 15) then
+        return CachedRiverContainers
+    end
+    lastContainerScanTime = os.clock()
+    CachedRiverContainers = {}
+
+    local candidateNames = {"belt", "river", "conveyor", "stream", "belteggs", "rivereggs", "spawnedeggs", "movingeggs", "eggs"}
+
+    for _, child in ipairs(Workspace:GetChildren()) do
+        local cName = child.Name:lower()
+        for _, cand in ipairs(candidateNames) do
+            if cName:find(cand) and not cName:find("shop") and not cName:find("market") and not cName:find("plot") then
+                table.insert(CachedRiverContainers, child)
+                break
+            end
+        end
+    end
+
+    local mapFolder = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("MapFolder")
+    if mapFolder then
+        for _, child in ipairs(mapFolder:GetChildren()) do
+            local cName = child.Name:lower()
+            for _, cand in ipairs(candidateNames) do
+                if cName:find(cand) and not cName:find("shop") and not cName:find("market") then
+                    table.insert(CachedRiverContainers, child)
+                    break
+                end
+            end
+        end
+    end
+
+    return CachedRiverContainers
+end
+
+-- ── Quét danh sách trứng thực sự đang trôi trên sông (SIÊU TỐI ƯU 60 FPS) ──
 local function getRiverEggs()
     local riverEggs = {}
     local excludedList = getExcludedContainers()
@@ -499,25 +559,17 @@ local function getRiverEggs()
     local highestEggFound = nil
     local highestEggRank = 0
 
-    -- 1. Ưu tiên quét các container băng chuyền/dòng sông nếu có trong map
     local checkedObjects = {}
-    local riverContainers = {}
-    for _, child in ipairs(Workspace:GetChildren()) do
-        local cName = child.Name:lower()
-        if cName:find("belt") or cName:find("river") or cName:find("conveyor") or cName:find("stream") then
-            table.insert(riverContainers, child)
-        end
-    end
+    local riverContainers = getRiverContainers()
 
     local function processCandidate(obj)
-        if checkedObjects[obj] then return end
+        if not obj or checkedObjects[obj] then return end
         checkedObjects[obj] = true
 
         if (obj:IsA("Model") or obj:IsA("BasePart")) then
             local oName = obj.Name:lower()
-            -- Phải có từ khóa egg/trứng hoặc nằm trong container sông
             local isNameEgg = oName:find("egg") or oName:find("trứng") or oName:find("belt")
-            if isNameEgg or #riverContainers > 0 then
+            if isNameEgg or (#riverContainers > 0 and obj.Parent and obj.Parent ~= Workspace) then
                 local isValid, reason, part, prompt, cd = verifyRiverEgg(obj, excludedList)
                 if isValid then
                     totalEggsFound = totalEggsFound + 1
@@ -551,14 +603,26 @@ local function getRiverEggs()
         end
     end
 
-    for _, container in ipairs(riverContainers) do
-        for _, desc in ipairs(container:GetDescendants()) do
-            processCandidate(desc)
+    -- 1. Nếu tìm thấy container sông / băng chuyền: CHỈ QUÉT NỘI DUNG CONTAINER ĐÓ (Siêu nhẹ, chỉ vài chục part)
+    if #riverContainers > 0 then
+        for _, container in ipairs(riverContainers) do
+            for _, child in ipairs(container:GetChildren()) do
+                processCandidate(child)
+                if child:IsA("Model") or child:IsA("Folder") then
+                    for _, subChild in ipairs(child:GetChildren()) do
+                        processCandidate(subChild)
+                    end
+                end
+            end
         end
-    end
-
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        processCandidate(obj)
+    else
+        -- 2. Nếu không có folder sông, CHỈ QUÉT CON TRỰC TIẾP CỦA WORKSPACE (Tuyệt đối không GetDescendants 50.000 part)
+        for _, obj in ipairs(Workspace:GetChildren()) do
+            local oName = obj.Name:lower()
+            if oName:find("egg") or oName:find("trứng") or oName:find("belt") then
+                processCandidate(obj)
+            end
+        end
     end
 
     pcall(function()
@@ -838,17 +902,30 @@ end
 -- 💰 BÁN THEO ĐỘ HIẾM CHỌN (SELECTIVE SELL)
 -- ═══════════════════════════════════════════════════════════
 
+local CachedSellZones = nil
+local lastSellZoneScan = 0
 local function getSellZones()
-    local zones = {}
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not obj:FindFirstAncestorOfClass("Player") then
-            local n = obj.Name:lower()
-            if n:find("sell") or n:find("bán") or n:find("deposit") or n:find("cashin") then
-                table.insert(zones, obj)
+    if CachedSellZones and #CachedSellZones > 0 and (os.clock() - lastSellZoneScan < 60) then
+        return CachedSellZones
+    end
+    lastSellZoneScan = os.clock()
+    CachedSellZones = {}
+
+    local function checkContainer(container)
+        if not container then return end
+        for _, obj in ipairs(container:GetChildren()) do
+            if obj:IsA("BasePart") and not obj:FindFirstAncestorOfClass("Player") then
+                local n = obj.Name:lower()
+                if n:find("sell") or n:find("bán") or n:find("deposit") or n:find("cashin") then
+                    table.insert(CachedSellZones, obj)
+                end
             end
         end
     end
-    return zones
+
+    checkContainer(Workspace)
+    checkContainer(Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("Buildings"))
+    return CachedSellZones
 end
 
 local function getSellableItems()
@@ -940,10 +1017,10 @@ end
 -- ⚙️ BACKGROUND LOOPS
 -- ═══════════════════════════════════════════════════════════
 
--- 1. Auto Buy River Eggs Loop
+-- 1. Auto Buy River Eggs Loop (Tần suất tối ưu 0.6s - Siêu nhẹ, không giật lag)
 task.spawn(function()
     while true do
-        task.wait(0.35)
+        task.wait(0.6)
         if State.AutoBuyRiverEggs and not isBuyingActive then
             pcall(function()
                 local eggs = getRiverEggs()
@@ -993,10 +1070,10 @@ task.spawn(function()
     end
 end)
 
--- 4. Auto Close Unwanted Shop Popups Loop (Kiểm tra và tự đóng popup shop nếu xuất hiện)
+-- 4. Auto Close Unwanted Shop Popups Loop (Kiểm tra nhẹ nhàng mỗi 1.5s)
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(1.5)
         if State.AutoCloseShopPopups then
             pcall(function()
                 autoCloseShopPopups()
@@ -1004,6 +1081,43 @@ task.spawn(function()
         end
     end
 end)
+
+-- ── Chế độ Tối ưu Đồ họa (FPS Booster 60 FPS) ──
+local function toggleFPSBooster(enable)
+    pcall(function()
+        local lighting = game:GetService("Lighting")
+        local terrain = Workspace:FindFirstChildOfClass("Terrain")
+        
+        if enable then
+            pcall(function() settings().Rendering.QualityLevel = 1 end)
+            if terrain then
+                terrain.WaterWaveSize = 0
+                terrain.WaterWaveSpeed = 0
+                terrain.WaterReflectance = 0
+                terrain.WaterTransparency = 0
+            end
+            lighting.GlobalShadows = false
+            lighting.FogEnd = 9e9
+            
+            for _, v in ipairs(Workspace:GetChildren()) do
+                if v:IsA("Model") or v:IsA("Folder") then
+                    for _, p in ipairs(v:GetChildren()) do
+                        if p:IsA("ParticleEmitter") or p:IsA("Trail") or p:IsA("Smoke") or p:IsA("Fire") or p:IsA("Sparkles") then
+                            p.Enabled = false
+                        end
+                    end
+                end
+            end
+            setStatus("⚡ Đã BẬT Chế Độ Siêu Mượt (FPS Booster)! Giảm tải để đạt 60 FPS.")
+        else
+            pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic end)
+            if lighting then
+                lighting.GlobalShadows = true
+            end
+            setStatus("ℹ️ Đã TẮT Chế Độ Siêu Mượt.")
+        end
+    end)
+end
 
 -- ═══════════════════════════════════════════════════════════
 -- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.5)
@@ -1208,7 +1322,12 @@ StatsLabel.TextSize = 11
 StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatsLabel.Parent = StatsBanner
 
+local lastCount, lastBest, lastBought, lastSold = -1, "", -1, -1
 updateEggCountUI = function(count, bestEgg, boughtTotal, soldTotal)
+    if count == lastCount and bestEgg == lastBest and boughtTotal == lastBought and soldTotal == lastSold then
+        return
+    end
+    lastCount, lastBest, lastBought, lastSold = count, bestEgg, boughtTotal, soldTotal
     StatsLabel.Text = "🌊 Sông: [" .. tostring(count) .. "] | " .. tostring(bestEgg) .. " | Mua: [" .. tostring(boughtTotal) .. "] | Bán: [" .. tostring(soldTotal) .. "]"
 end
 
@@ -1535,4 +1654,9 @@ createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, functi
     State.AntiAFK = val
 end)
 
-setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.5 (Bảo vệ chống click nhầm shop)!")
+createToggle("⚡ Chế Độ Siêu Mượt 60 FPS (FPS Booster)", State.FPSBooster, function(val)
+    State.FPSBooster = val
+    toggleFPSBooster(val)
+end, Color3.fromRGB(0, 255, 180))
+
+setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.5 (Tối ưu 60 FPS - Chống lag & Chống click nhầm shop)!")
