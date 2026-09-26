@@ -1,4 +1,4 @@
-# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TẤT CẢ TRỨNG V2.4
+# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.5
 
 Script chuyên biệt tự động quét **mua trứng trôi trên dòng sông** và **tự động bán tất cả trứng theo quy trình chuẩn game** cho tựa game **[👺] Ấp hoặc nứt một quả trứng** (Hatch or Crack an Egg) trên Roblox, được phát triển bởi nhóm **Get it or Lose it**.
 
@@ -22,7 +22,27 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/khahuynh963/hatch_or_
 
 ---
 
-## 🔥 Tính Năng Mới V2.4: Bán Tất Cả Trứng (Chuẩn Menu Game)
+## 🛡️ Tính Năng Mới V2.5: Bảo Vệ Tuyệt Đối Chống Click Nhầm Shop & Vật Phẩm Khác
+
+Khắc phục triệt để lỗi bot bay hoặc tương tác nhầm vào **"EGG DROP SHOP"**, quầy đổi vé (Tickets), vòng quay (Odds), quầy trưng bày Pet/Titan, máy gắp và các vật phẩm khác:
+
+1. **🚫 Danh Sách Đen 3 Lớp (Strict Blacklist Engine)**:
+   * **Tên vật thể**: Loại trừ ngay lập tức nếu tên chứa các từ khóa shop, store, egg drop, golden drop, ticket, odds, pet, titan, rebirth, index, crate, spin, chest, door, plot, base, v.v.
+   * **Cây tổ tiên (Ancestors)**: Quét ngược từ thư mục cha lên tới Workspace để đảm bảo trứng không nằm bên trong bất kỳ quầy shop, máy móc hay công trình nào.
+   * **Độ phức tạp Model (<= 25 parts)**: Trứng sông luôn là mô hình đơn giản (chỉ vài chi tiết). Mọi quầy shop, tòa nhà, bệ đứng luôn có từ 30 đến hàng trăm chi tiết và sẽ bị từ chối 100%.
+2. **🎯 Lọc Nội Dung ProximityPrompt & GUI**:
+   * Chặn tất cả prompt có hành động mở shop, quay thưởng, đổi vé, xem tỉ lệ (`Open`, `View`, `Shop`, `Drop`, `Ticket`, `Odds`, `Pull lever`, `Hatch`, `Free in`).
+   * Quét chữ trong BillboardGui/SurfaceGui: Nếu chứa các dòng chữ như `EGG DROP SHOP`, `TICKETS`, `ODDS`, `ROBUX` sẽ bị loại bỏ lập tức.
+3. **⚡ Cơ Chế Mua An Toàn (Safe Remote Firing)**:
+   * Loại bỏ triệt để các Remote mua chung (`buyegg`, `purchaseegg`) vốn là nguyên nhân kích hoạt bảng giao diện EGG DROP SHOP của game.
+   * Chỉ kích hoạt ProximityPrompt / ClickDetector trực tiếp trên quả trứng sông thực sự.
+4. **❌ Tự Động Đóng Popup Shop (Auto Close Popups)**:
+   * Tự động phát hiện và bấm nút `✕` để đóng ngay lập tức nếu bảng EGG DROP SHOP hay shop nào vô tình mở lên.
+   * Cung cấp nút thủ công **`❌ Đóng Mọi Popup Shop Đang Mở (Close Popups)`** trên menu.
+
+---
+
+## 🔥 Tính Năng V2.4: Bán Tất Cả Trứng (Chuẩn Menu Game)
 
 Dựa trên 3 hình ảnh giao diện thực tế của game, script tự động thực hiện chu trình bán 3 bước chuẩn xác 100%:
 

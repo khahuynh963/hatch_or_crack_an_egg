@@ -1,25 +1,29 @@
 --[[
     ===================================================================
-    🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.4
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.5
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
     Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    TÍNH NĂNG MỚI V2.4 (THEO 3 HÌNH ẢNH MINH HỌA CỦA GAME):
-    1. 🔥 CHU TRÌNH BÁN TẤT CẢ TRỨNG TỰ ĐỘNG CHUẨN 100% GIAO DIỆN GAME:
+    TÍNH NĂNG MỚI V2.5 (BẢO VỆ TUYỆT ĐỐI - KHÔNG CLICK NHẦM SHOP / VẬT PHẨM KHÁC):
+    1. 🛡️ CHỐNG TƯƠNG TÁC NHẦM VÀO SHOP & VẬT PHẨM KHÁC:
+       - Loại bỏ 100% việc bay hoặc click nhầm vào "EGG DROP SHOP", quầy đổi vé (Tickets), vòng quay (Odds), máy gắp, và các shop gamepass/robux.
+       - Bộ lọc 3 lớp nghiêm ngặt (Blacklist): Kiểm tra tên đối tượng, cây thư mục cha/ông, nội dung ProximityPrompt, và chữ GUI/Billboard.
+       - Giới hạn chi tiết mô hình (<= 25 parts): Ngăn chặn việc nhận diện tòa nhà/quầy shop/bệ trưng bày làm trứng sông.
+       - Loại bỏ hoàn toàn Remote mua chung chung ('buyegg', 'purchaseegg') gây tự động mở bảng EGG DROP SHOP.
+       - Tự động đóng các bảng Shop Popup nếu vô tình bị mở (Auto Close Shop Popups).
+    2. 🔥 CHU TRÌNH BÁN TẤT CẢ TRỨNG TỰ ĐỘNG CHUẨN 100% GIAO DIỆN GAME:
        - Bước 1: Tự động bấm nút [Bán] màu xanh ở thanh menu phía trên (hoặc tương tác Thị trường trứng).
        - Bước 2: Bấm chọn dòng [2. Bán tất cả trứng] trong bảng "Người bán trứng".
        - Bước 3: Bấm chọn dòng xác nhận [1. Có, bán chúng đi] để hoàn tất bán sạch toàn bộ trứng lấy tiền.
-       - Hỗ trợ cả nút bấm thủ công [Bán tất cả ngay] và nút gạt tự động chạy lặp [Auto Bán Tất Cả Trứng].
-    2. 💰 AUTO BÁN THEO ĐỘ HIẾM (CHỈ ĐƯỢC BÁN):
+    3. 💰 AUTO BÁN THEO ĐỘ HIẾM (CHỈ ĐƯỢC BÁN):
        - Tự lọc và chỉ bán các độ hiếm cho phép (Thường, Không phổ biến, Hiếm).
        - Khóa an toàn không bán trứng xịn (Huyền tuyệt, Huyền thoại, Bật mí, Giới hạn).
-    3. 🌊 AUTO MUA TRỨNG TRÊN SÔNG:
+    4. 🌊 AUTO MUA TRỨNG TRÊN SÔNG:
        - Chỉ dịch chuyển đúng 1 lần duy nhất cho mỗi quả trứng (Memory Blacklist).
-       - Chỉ quét trứng trên dòng sông, tuyệt đối không dịch chuyển vào máy ấp hay plot người khác.
+       - Chỉ quét trứng trên dòng sông, tuyệt đối không dịch chuyển lung tung.
        - Tự động quay về chỗ cũ (Auto Return To Base) sau khi mua.
-    4. 🧪 DEBUG & TEST CÔNG CỤ TRỰC TIẾP TRÊN MENU.
     ===================================================================
 --]]
 
@@ -80,6 +84,7 @@ local State = {
     AutoTpToRiverEgg = true,
     AutoReturnToBase = true, -- Tự động quay về chỗ cũ sau khi mua
     InfiniteRiverRange = true,
+    AutoCloseShopPopups = true, -- Tự động đóng mọi bảng shop nếu mở nhầm
     BuyRarities = {
         Common = false,      -- Thường
         Uncommon = false,    -- Không phổ biến
@@ -221,17 +226,106 @@ local function triggerPrompt(prompt)
     end)
 end
 
+-- ── DANH SÁCH TỪ KHÓA BỊ CHẶN TUYỆT ĐỐI (SHOP, DROP, TICKET, MÁY MÓC, VẬT PHẨM KHÁC) ──
+local SHOP_AND_ITEM_BLACKLIST = {
+    -- Shop, Store & Vendors
+    "shop", "cửa hàng", "cua hang", "store", "kiosk", "stand", "booth", "stall", "cart",
+    -- Egg Drop & Ticket features (EGG DROP SHOP, Golden Drop)
+    "drop", "eggdrop", "goldendrop", "ticket", "vé", "ve", "odds", "tỉ lệ", "ti le", "chance", "rate",
+    -- Market, Trading, Pedestals & NPCs
+    "market", "thị trường", "thi truong", "chợ", "cho", "merchant", "trader", "seller", "dealer", "vendor", "npc", "pedestal",
+    -- Gamepasses, Robux & Products
+    "pass", "gamepass", "robux", "devproduct", "product", "vip", "premium",
+    -- Machines, Incubators & Nests (Máy ấp, tổ chim, bệ ấp)
+    "machine", "incubator", "nest", "tổ", "to", "ấp", "ap", "hatch", "crack", "multiplier", "lever", "cần gạt", "can gat",
+    -- Pet & Titan showcases
+    "titan", "pet", "voi", "companion", "statue", "tượng", "tuong",
+    -- Mini games, Spins, Wheels, Crates & Chests
+    "spin", "wheel", "roulette", "crate", "box", "chest", "rương", "ruong", "hòm", "hom",
+    -- Rebirth, Index & Leaderboards
+    "rebirth", "tái sinh", "tai sinh", "index", "mục lục", "muc luc", "leaderboard", "bảng", "bang", "rank", "top",
+    -- Quests, Stories & Teleports
+    "reward", "gift", "phần thưởng", "phan thuong", "free", "miễn phí", "mien phi", "daily", "quest", "nhiệm vụ", "story", "cốt truyện",
+    "door", "gate", "portal", "cổng", "cong", "teleport", "plot", "base", "tycoon", "lobby", "spawn", "zone", "island",
+    -- Display & GUI
+    "billboard", "surfacegui", "screengui", "sign", "board"
+}
+
+local PROMPT_BLACKLIST = {
+    "shop", "cửa hàng", "cua hang", "store",
+    "drop", "ticket", "vé", "ve", "odds", "tỉ lệ", "ti le",
+    "open", "view", "mở", "mo", "xem", "interact", "talk", "nói chuyện",
+    "pull", "lever", "gạt", "gat", "hatch", "ấp", "ap",
+    "multiplier", "roll", "spin", "wheel", "quay",
+    "pass", "robux", "free", "miễn phí", "free in", "need 5",
+    "rebirth", "tái sinh", "tai sinh", "sell", "bán", "ban",
+    "upgrade", "nâng cấp", "craft", "chế tạo",
+    "claim reward", "gift", "daily"
+}
+
+-- ── Tự Động Đóng Các Bảng Shop / Popup Bị Mở Nhầm ──
+local function autoCloseShopPopups()
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pGui then return false end
+
+    local closedAny = false
+
+    for _, screen in ipairs(pGui:GetChildren()) do
+        if screen:IsA("ScreenGui") and screen ~= ScreenGui then
+            for _, desc in ipairs(screen:GetDescendants()) do
+                if (desc:IsA("Frame") or desc:IsA("ImageLabel")) and desc.Visible then
+                    local fName = desc.Name:lower()
+                    local isShop = false
+
+                    if fName:find("eggdrop") or fName:find("shop") or fName:find("drop") or fName:find("ticket") then
+                        isShop = true
+                    else
+                        for _, child in ipairs(desc:GetChildren()) do
+                            if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Visible then
+                                local txt = child.Text:lower()
+                                if txt:find("egg drop shop") or txt:find("golden drop") or txt:find("need 5 tickets") 
+                                   or txt:find("ticket a drop") or txt:find("more tickets") then
+                                    isShop = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+
+                    if isShop then
+                        for _, btn in ipairs(desc:GetDescendants()) do
+                            if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
+                                local bName = btn.Name:lower()
+                                local bText = btn:IsA("TextButton") and btn.Text:lower() or ""
+                                if bName:find("close") or bName:find("exit") or bName == "x" or bName == "closebutton"
+                                   or bText == "x" or bText == "✕" or bText == "✖" then
+                                    if firesignal then
+                                        firesignal(btn.MouseButton1Click)
+                                        firesignal(btn.Activated)
+                                    end
+                                    pcall(function()
+                                        desc.Visible = false
+                                    end)
+                                    closedAny = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closedAny
+end
+
 -- ── Lọc và phát hiện các khu vực máy / plot của người chơi ──
 local function getExcludedContainers()
     local excluded = {}
-    local blacklistNames = {
-        "plot", "base", "tycoon", "machine", "incubator", "nest", 
-        "shop", "stand", "display", "statue", "leaderboard", "lobby", "spawn"
-    }
-
     for _, desc in ipairs(Workspace:GetChildren()) do
         local n = desc.Name:lower()
-        for _, bName in ipairs(blacklistNames) do
+        for _, bName in ipairs(SHOP_AND_ITEM_BLACKLIST) do
             if n:find(bName) then
                 table.insert(excluded, desc)
                 break
@@ -250,6 +344,11 @@ local function evaluateEggRarity(obj)
     local function checkText(str)
         if not str then return end
         local lower = str:lower()
+
+        -- Bỏ qua text quảng cáo hoặc tỉ lệ của shop/drop
+        if lower:find("drop") or lower:find("ticket") or lower:find("odds") or lower:find("belt eggs") or lower:find("free in") then
+            return
+        end
 
         -- 8. Giới hạn (Limited / Exclusive)
         if lower:find("giới hạn") or lower:find("gioi han") or lower:find("limited") or lower:find("exclusive") then
@@ -304,7 +403,7 @@ local function evaluateEggRarity(obj)
     return bestRarityKey, bestRank, bestRarityName
 end
 
--- ── Kiểm tra nghiêm ngặt: Có đúng là trứng trên dòng sông không? ──
+-- ── Kiểm tra nghiêm ngặt: Có đúng là trứng trên dòng sông không? (CHỐNG CLICK NHẦM SHOP) ──
 local function verifyRiverEgg(obj, excludedList)
     if not obj or not obj.Parent then return false, "No parent" end
     if isEggProcessed(obj) then return false, "Already processed" end
@@ -314,16 +413,23 @@ local function verifyRiverEgg(obj, excludedList)
         return false, "In player character"
     end
 
-    -- 1. Kiểm tra toàn bộ cây tổ tiên (Tránh plot, máy ấp, shop)
+    local oName = obj.Name:lower()
+
+    -- 1. KIỂM TRA TÊN VẬT THỂ: Loại bỏ triệt để shop, egg drop, ticket, machine, titan/pet, v.v.
+    for _, bWord in ipairs(SHOP_AND_ITEM_BLACKLIST) do
+        if oName:find(bWord) then
+            return false, "Blacklisted object name: " .. obj.Name .. " (" .. bWord .. ")"
+        end
+    end
+
+    -- 2. KIỂM TRA TOÀN BỘ CÂY TỔ TIÊN (Từ Parent lên tận Workspace)
     local cur = obj.Parent
     while cur and cur ~= Workspace do
         local cName = cur.Name:lower()
-        if cName:find("machine") or cName:find("incubator") or cName:find("nest") 
-           or cName:find("plot") or cName:find("base") or cName:find("tycoon") 
-           or cName:find("gear") or cName:find("shop") or cName:find("stand") 
-           or cName:find("display") or cName:find("leaderboard") or cName:find("statue")
-           or cName:find("spawn") then
-            return false, "In machine/plot: " .. cur.Name
+        for _, bWord in ipairs(SHOP_AND_ITEM_BLACKLIST) do
+            if cName:find(bWord) then
+                return false, "In blacklisted container: " .. cur.Name .. " (" .. bWord .. ")"
+            end
         end
         for _, ex in ipairs(excludedList) do
             if cur == ex then
@@ -333,7 +439,15 @@ local function verifyRiverEgg(obj, excludedList)
         cur = cur.Parent
     end
 
-    -- 2. Kiểm tra ProximityPrompt / ClickDetector
+    -- 3. KIỂM TRA ĐỘ PHỨC TẠP CỦA MODEL (Trứng sông <= 25 chi tiết; Shop/Tòa nhà/Bệ đỡ >= 30 chi tiết)
+    if obj:IsA("Model") then
+        local descCount = #obj:GetDescendants()
+        if descCount > 25 then
+            return false, "Structure model too complex (" .. descCount .. " parts), not a river egg"
+        end
+    end
+
+    -- 4. KIỂM TRA PROXIMITY PROMPT / CLICK DETECTOR
     local prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ProximityPrompt", true))
     local cd = obj:FindFirstChildOfClass("ClickDetector") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ClickDetector", true))
 
@@ -341,19 +455,32 @@ local function verifyRiverEgg(obj, excludedList)
         return false, "No prompt or click detector"
     end
 
-    -- 3. Kiểm tra nội dung Prompt: TUYỆT ĐỐI LOẠI BỎ cần gạt hoặc nút ấp máy
+    -- 5. KIỂM TRA NỘI DUNG PROMPT: Loại trừ ActionText & ObjectText của Shop, Drop, Ticket, Máy
     if prompt then
         local act = (prompt.ActionText or ""):lower()
         local objText = (prompt.ObjectText or ""):lower()
+        local combinedPrompt = act .. " " .. objText
 
-        if act:find("pull") or act:find("lever") or act:find("hatch") or act:find("ấp") 
-           or act:find("gạt") or act:find("multiplier") or act:find("roll") or act:find("start")
-           or objText:find("lever") or objText:find("multiplier") or objText:find("gear") then
-            return false, "Machine prompt: " .. act
+        for _, pbWord in ipairs(PROMPT_BLACKLIST) do
+            if combinedPrompt:find(pbWord) then
+                return false, "Blacklisted prompt action/object: " .. combinedPrompt .. " (" .. pbWord .. ")"
+            end
         end
     end
 
-    -- 4. Tìm phần Part vật lý
+    -- 6. KIỂM TRA NỘI DUNG TEXT TRONG GUI/BILLBOARD BÊN TRONG VẬT THỂ
+    for _, desc in ipairs(obj:GetDescendants()) do
+        if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+            local t = desc.Text:lower()
+            if t:find("egg drop") or t:find("golden drop") or t:find("tickets") 
+               or t:find("shop") or t:find("odds") or t:find("free in") or t:find("robux")
+               or t:find("cửa hàng") or t:find("tỉ lệ") then
+                return false, "Contains shop text in GUI: " .. desc.Text
+            end
+        end
+    end
+
+    -- 7. TÌM BASEPART VẬT LÝ
     local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
     if not part then
         return false, "No physical part"
@@ -372,10 +499,25 @@ local function getRiverEggs()
     local highestEggFound = nil
     local highestEggRank = 0
 
-    for _, obj in ipairs(Workspace:GetDescendants()) do
+    -- 1. Ưu tiên quét các container băng chuyền/dòng sông nếu có trong map
+    local checkedObjects = {}
+    local riverContainers = {}
+    for _, child in ipairs(Workspace:GetChildren()) do
+        local cName = child.Name:lower()
+        if cName:find("belt") or cName:find("river") or cName:find("conveyor") or cName:find("stream") then
+            table.insert(riverContainers, child)
+        end
+    end
+
+    local function processCandidate(obj)
+        if checkedObjects[obj] then return end
+        checkedObjects[obj] = true
+
         if (obj:IsA("Model") or obj:IsA("BasePart")) then
             local oName = obj.Name:lower()
-            if oName:find("egg") or oName:find("trứng") then
+            -- Phải có từ khóa egg/trứng hoặc nằm trong container sông
+            local isNameEgg = oName:find("egg") or oName:find("trứng") or oName:find("belt")
+            if isNameEgg or #riverContainers > 0 then
                 local isValid, reason, part, prompt, cd = verifyRiverEgg(obj, excludedList)
                 if isValid then
                     totalEggsFound = totalEggsFound + 1
@@ -409,6 +551,16 @@ local function getRiverEggs()
         end
     end
 
+    for _, container in ipairs(riverContainers) do
+        for _, desc in ipairs(container:GetDescendants()) do
+            processCandidate(desc)
+        end
+    end
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        processCandidate(obj)
+    end
+
     pcall(function()
         updateEggCountUI(totalEggsFound, highestEggFound or "Chưa có", PurchasedCount, SoldCount)
     end)
@@ -420,7 +572,7 @@ local function getRiverEggs()
     return riverEggs
 end
 
--- ── Thực hiện mua 1 quả trứng duy nhất (Chỉ bay 1 lần, không bay lung tung) ──
+-- ── Thực hiện mua 1 quả trứng duy nhất (Chỉ bay 1 lần, tuyệt đối không gọi remote shop) ──
 local function buySingleRiverEgg(eggData, isManualTest)
     if isBuyingActive then return false end
     isBuyingActive = true
@@ -454,7 +606,7 @@ local function buySingleRiverEgg(eggData, isManualTest)
         setStatus("⚡ Mua từ xa: " .. obj.Name .. " [" .. eggData.RarityName .. "]")
     end
 
-    -- 2. KÍCH HOẠT PROXIMITY PROMPT
+    -- 2. KÍCH HOẠT PROXIMITY PROMPT (Cơ chế thu thập chính quy trên sông)
     if prompt then
         if State.InfiniteRiverRange then
             prompt.RequiresLineOfSight = false
@@ -470,20 +622,28 @@ local function buySingleRiverEgg(eggData, isManualTest)
         fireclickdetector(cd)
     end
 
-    -- 4. BẮN REMOTE EVENT MUA TRỨNG SÔNG
-    local buyRemote = findRemote({"buyegg", "riverbuy", "purchaseegg", "buyriver", "claimriveregg", "takeegg"})
-    if buyRemote then
-        if buyRemote:IsA("RemoteEvent") then
-            buyRemote:FireServer(obj)
-            buyRemote:FireServer(obj.Name)
-        elseif buyRemote:IsA("RemoteFunction") then
-            buyRemote:InvokeServer(obj)
-        end
+    -- 4. BẮN REMOTE EVENT MUA TRỨNG SÔNG CHUYÊN BIỆT (TUYỆT ĐỐI KHÔNG BẮN REMOTE 'buyegg' CỦA SHOP)
+    local riverRemote = findRemote({"buyriveregg", "riveregg", "claimriveregg", "buyriver", "claimbeltegg", "takebeltegg", "beltegg", "buybelt", "takeegg"})
+    if riverRemote then
+        pcall(function()
+            if riverRemote:IsA("RemoteEvent") then
+                riverRemote:FireServer(obj)
+            elseif riverRemote:IsA("RemoteFunction") then
+                riverRemote:InvokeServer(obj)
+            end
+        end)
     end
 
-    task.wait(0.15)
+    task.wait(0.12)
 
-    -- 5. QUAY VỀ VỊ TRÍ CŨ NẾU BẬT AUTO RETURN
+    -- 5. TỰ ĐỘNG ĐÓNG POPUP SHOP NẾU VÔ TÌNH BẬT MỞ
+    if State.AutoCloseShopPopups then
+        pcall(function()
+            autoCloseShopPopups()
+        end)
+    end
+
+    -- 6. QUAY VỀ VỊ TRÍ CŨ NẾU BẬT AUTO RETURN
     if didTeleport and State.AutoReturnToBase and originalCFrame then
         setStatus("🔙 Đã mua xong! Đang quay lại vị trí ban đầu...")
         task.wait(0.08)
@@ -516,6 +676,13 @@ local function openSellMarketUI()
             local lowerText = text:lower():gsub("%s+", "")
             local lowerName = btn.Name:lower()
 
+            -- Tránh tuyệt đối click nhầm các nút Cửa Hàng, Tái Sinh, Mục Lục, Pass
+            if lowerName:find("shop") or lowerName:find("store") or lowerName:find("cart") 
+               or lowerText:find("cửa hàng") or lowerText:find("tái sinh") or lowerText:find("mục lục")
+               or lowerText:find("pass") or lowerName:find("rebirth") then
+                continue
+            end
+
             if lowerText == "bán" or lowerText == "ban" or lowerName == "sell" or lowerName == "sellbutton" or lowerName == "btn_sell" then
                 if firesignal then
                     firesignal(btn.MouseButton1Click)
@@ -532,7 +699,9 @@ local function openSellMarketUI()
         if prompt:IsA("ProximityPrompt") then
             local act = (prompt.ActionText or ""):lower()
             local obj = (prompt.ObjectText or ""):lower()
-            if act:find("sell") or obj:find("market") or obj:find("thị trường") or act:find("bán") then
+            -- Không tương tác nếu có từ khóa buy, drop, ticket, shop
+            if (act:find("sell") or act:find("bán") or obj:find("market") or obj:find("thị trường"))
+               and not act:find("buy") and not act:find("drop") and not act:find("ticket") and not act:find("shop") then
                 triggerPrompt(prompt)
                 opened = true
                 break
@@ -824,8 +993,20 @@ task.spawn(function()
     end
 end)
 
+-- 4. Auto Close Unwanted Shop Popups Loop (Kiểm tra và tự đóng popup shop nếu xuất hiện)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if State.AutoCloseShopPopups then
+            pcall(function()
+                autoCloseShopPopups()
+            end)
+        end
+    end
+end)
+
 -- ═══════════════════════════════════════════════════════════
--- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.4)
+-- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.5)
 -- ═══════════════════════════════════════════════════════════
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -903,7 +1084,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.4"
+Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.5"
 Title.TextColor3 = Color3.fromRGB(0, 220, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 14
@@ -1068,7 +1249,7 @@ Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
 Scroll.ScrollBarThickness = 4
 Scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 210, 255)
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 1320)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 1420)
 Scroll.Parent = MainFrame
 
 local UIList = Instance.new("UIListLayout")
@@ -1218,6 +1399,11 @@ createToggle("⚡ Mua Tầm Xa Vô Hạn (Infinite Range)", State.InfiniteRiverR
     State.InfiniteRiverRange = val
 end)
 
+createToggle("🛡️ Tự Đóng Shop Popup Mở Nhầm", State.AutoCloseShopPopups, function(val)
+    State.AutoCloseShopPopups = val
+    setStatus(val and "🛡️ Đã BẬT: Tự động đóng mọi popup shop nếu vô tình mở nhầm!" or "Đã TẮT tự đóng popup.")
+end)
+
 -- ═══════════════════════════════════════════════════════════
 -- ── SECTION 3: BÁN THEO ĐỘ HIẾM CHỌN (CHỈ ĐƯỢC BÁN) ──
 -- ═══════════════════════════════════════════════════════════
@@ -1296,6 +1482,11 @@ createActionButton("🗑️ Xóa Bộ Nhớ Trứng Đã Mua (Reset Memory)", Co
     setStatus("🗑️ Đã xóa bộ nhớ! Script có thể quét lại các trứng cũ nếu cần.")
 end)
 
+createActionButton("❌ Đóng Mọi Popup Shop Đang Mở (Close Popups)", Color3.fromRGB(180, 40, 50), function()
+    local closed = autoCloseShopPopups()
+    setStatus(closed and "✅ Đã đóng popup shop thành công!" or "ℹ️ Không phát hiện bảng shop nào đang mở.")
+end)
+
 -- ═══════════════════════════════════════════════════════════
 -- ── SECTION 5: BỘ LỌC ĐỘ HIẾM MUỐN MUA (BUY FILTERS) ──
 -- ═══════════════════════════════════════════════════════════
@@ -1344,4 +1535,4 @@ createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, functi
     State.AntiAFK = val
 end)
 
-setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.4!")
+setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.5 (Bảo vệ chống click nhầm shop)!")
