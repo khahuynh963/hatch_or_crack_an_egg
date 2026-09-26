@@ -1,6 +1,6 @@
-# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.5
+# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.6
 
-Script chuyên biệt tự động quét **mua trứng trôi trên dòng sông** và **tự động bán tất cả trứng theo quy trình chuẩn game** cho tựa game **[👺] Ấp hoặc nứt một quả trứng** (Hatch or Crack an Egg) trên Roblox, được phát triển bởi nhóm **Get it or Lose it**.
+Script chuyên biệt tự động quét **mua trứng trôi trên dòng sông**, **tự động bán sạch trứng khi balo đầy**, và **bán tất cả trứng theo quy trình chuẩn game 3 bước** cho tựa game **[👺] Ấp hoặc nứt một quả trứng** (Hatch or Crack an Egg) trên Roblox, được phát triển bởi nhóm **Get it or Lose it**.
 
 Tương thích mượt mà 100% cho **Delta Executor (Android & PC)**, Codex, Wave, Hydrogen, Fluxus và Solara.
 
@@ -22,50 +22,21 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/khahuynh963/hatch_or_
 
 ---
 
-## 🛡️ Tính Năng Mới V2.5: Bảo Vệ Tuyệt Đối Chống Click Nhầm Shop & Vật Phẩm Khác
+## 🎒 Tính Năng Mới V2.6: Tự Động Bán Khi Balo Đầy (Full Backpack Auto-Sell)
 
-Khắc phục triệt để lỗi bot bay hoặc tương tác nhầm vào **"EGG DROP SHOP"**, quầy đổi vé (Tickets), vòng quay (Odds), quầy trưng bày Pet/Titan, máy gắp và các vật phẩm khác:
+Giải quyết triệt để vấn đề đầy balo làm gián đoạn quá trình cày cuốc và gom trứng xịn:
 
-1. **🚫 Danh Sách Đen 3 Lớp (Strict Blacklist Engine)**:
-   * **Tên vật thể**: Loại trừ ngay lập tức nếu tên chứa các từ khóa shop, store, egg drop, golden drop, ticket, odds, pet, titan, rebirth, index, crate, spin, chest, door, plot, base, v.v.
-   * **Cây tổ tiên (Ancestors)**: Quét ngược từ thư mục cha lên tới Workspace để đảm bảo trứng không nằm bên trong bất kỳ quầy shop, máy móc hay công trình nào.
-   * **Độ phức tạp Model (<= 25 parts)**: Trứng sông luôn là mô hình đơn giản (chỉ vài chi tiết). Mọi quầy shop, tòa nhà, bệ đứng luôn có từ 30 đến hàng trăm chi tiết và sẽ bị từ chối 100%.
-2. **🎯 Lọc Nội Dung ProximityPrompt & GUI**:
-   * Chặn tất cả prompt có hành động mở shop, quay thưởng, đổi vé, xem tỉ lệ (`Open`, `View`, `Shop`, `Drop`, `Ticket`, `Odds`, `Pull lever`, `Hatch`, `Free in`).
-   * Quét chữ trong BillboardGui/SurfaceGui: Nếu chứa các dòng chữ như `EGG DROP SHOP`, `TICKETS`, `ODDS`, `ROBUX` sẽ bị loại bỏ lập tức.
-3. **⚡ Cơ Chế Mua An Toàn (Safe Remote Firing)**:
-   * Loại bỏ triệt để các Remote mua chung (`buyegg`, `purchaseegg`) vốn là nguyên nhân kích hoạt bảng giao diện EGG DROP SHOP của game.
-   * Chỉ kích hoạt ProximityPrompt / ClickDetector trực tiếp trên quả trứng sông thực sự.
-4. **❌ Tự Động Đóng Popup Shop (Auto Close Popups)**:
-   * Tự động phát hiện và bấm nút `✕` để đóng ngay lập tức nếu bảng EGG DROP SHOP hay shop nào vô tình mở lên.
-   * Cung cấp nút thủ công **`❌ Đóng Mọi Popup Shop Đang Mở (Close Popups)`** trên menu.
-
----
-
-## ⚡ Tối Ưu Hiệu Năng 60 FPS (Khắc Phục Lag Triệt Để)
-
-Bản cập nhật tối ưu hóa toàn diện giúp script chạy cực kỳ mượt mà, không còn hiện tượng giật lag hay tụt FPS trên điện thoại (Delta Executor) và máy tính:
-
-1. **🚀 Loại Bỏ Quét Toàn Bản Đồ (`Workspace:GetDescendants`)**:
-   * Trước đó, việc quét đệ quy hơn 50.000 đối tượng trên toàn bộ map mỗi 0.35s khiến CPU bị nghẽn dẫn đến lag giật nghiêm trọng.
-   * Chuyển sang công nghệ **Cached River Container Scanning**: Script xác định vùng sông/băng chuyền (`Belt`, `River`, `Eggs`) và **chỉ quét trong đúng folder đó (~15 đến 30 vật thể)**. Giảm 99.9% tải CPU, đưa FPS về mức ổn định 60 FPS!
-2. **💾 Caching Remote & Sell Zones**:
-   * Remote và các khu vực bán được ghi nhớ trong bộ nhớ đệm (Cache), không còn tình trạng đứng hình mỗi lần kích hoạt mua hoặc bán.
-3. **⚡ Tích Hợp Nút Chế Độ Siêu Mượt (FPS Booster)**:
-   * Có sẵn nút bật/tắt **`⚡ Chế Độ Siêu Mượt 60 FPS (FPS Booster)`** ngay trên giao diện để tự động giảm bớt các hiệu ứng đồ họa nặng (hạt particle, bóng đổ), giúp máy mát hơn khi treo 24/7.
-
----
-
-## 🔥 Tính Năng V2.4: Bán Tất Cả Trứng (Chuẩn Menu Game)
-
-Dựa trên 3 hình ảnh giao diện thực tế của game, script tự động thực hiện chu trình bán 3 bước chuẩn xác 100%:
-
-1. **Bước 1**: Tự động bấm nút **[Bán]** màu xanh trên thanh công cụ phía trên màn hình (hoặc tương tác ProximityPrompt `Egg Market / Sell Eggs` tại Thị trường trứng).
-2. **Bước 2**: Trong bảng hội thoại **Người bán trứng**, script tự động click dòng **`2. Bán tất cả trứng`** (kèm hiển thị tổng số tiền nhận được như $1.05B, $599B).
-3. **Bước 3**: Khi bảng xác nhận bật lên, script tự động click dòng **`1. Có, bán chúng đi`** để hoàn tất bán sạch toàn bộ trứng lấy tiền ngay lập tức!
-
-* **Nút bấm thủ công**: **`🔥 BÁN TẤT CẢ TRỨNG NGAY (SELL ALL NOW)`** — 1 click duy nhất chạy trọn vẹn chu trình 3 bước trên.
-* **Nút gạt tự động**: **`⚡ Auto Bán Tất Cả Trứng`** — Tự động lặp lại chu trình sau mỗi 3.5 giây, giúp bạn thoải mái treo máy gom tiền mà không bao giờ bị đầy túi!
+1. **📊 Nhận Diện Dung Lượng Balo Thời Gian Thực**:
+   * Tự động quét và đọc chính xác thông số balo hiển thị trên góc phải màn hình game (dạng `471/500`, `472/500`, `500/500`).
+   * Hiển thị trực tiếp thông số này lên thanh trạng thái GUI: `🎒 Balo: [471/500]` giúp bạn dễ dàng theo dõi.
+2. **⚡ Balo Đầy Tự Động Kích Hoạt Bán Trứng**:
+   * Ngay khi số lượng trứng trong balo chạm ngưỡng tối đa (`cur >= max`, ví dụ 500/500), script sẽ tự động kích hoạt chu trình bán tất cả để giải phóng 100% dung lượng balo lấy tiền mặt.
+3. **🤝 Tích Hợp Đồng Bộ Với Auto Mua Sông**:
+   * Trước mỗi lần mua trứng sông, script sẽ kiểm tra balo. Nếu balo đã đầy, nó sẽ **tạm dừng mua để bán sạch balo trước**, sau đó mới tiếp tục gom trứng xịn. Tránh hoàn toàn việc bay đến quả trứng sông nhưng không nhặt được vì đầy túi!
+4. **🔥 Khắc Phục Toàn Diện Lỗi Nút Bán (Multi-Input Click & Polling)**:
+   * **Nhận diện chính xác nút [Bán]**: Tìm kiếm TextLabel mang chữ "Bán" / "BÁN" chuẩn UTF-8 nằm bên trong `ImageButton` trên thanh TopBar.
+   * **Cơ chế Click Đa Nền Tảng (Multi-Input)**: Kết hợp đồng thời `firesignal`, `getconnections`, và **`VirtualInputManager`** (mô phỏng thao tác click chuột / chạm tay phần cứng tại đúng tọa độ tâm của nút trên màn hình).
+   * **Hệ thống Polling thông minh**: Chờ bảng thoại "Người bán trứng" xuất hiện tối đa 2.5s cho bước 2 (`2. Bán tất cả trứng`) và bước 3 (`1. Có, bán chúng đi`), kèm cơ chế tự động bấm lại nếu game bị lag.
 
 ---
 
