@@ -1,24 +1,23 @@
 --[[
     ===================================================================
-    🌊 HATCH OR CRACK AN EGG! - AUTO MUA TRỨNG TRÊN SÔNG V2.1 (CHUYÊN BIỆT)
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.2
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
     Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    CẢI TIẾN V2.1 THEO YÊU CẦU:
-    1. KIỂM SOÁT DỊCH CHUYỂN CHẶT CHẼ:
-       - Chỉ dịch chuyển đúng 1 LẦN duy nhất cho mỗi quả trứng.
-       - Ghi nhớ lịch sử trứng đã mua (Memory Blacklist), tuyệt đối không dịch chuyển lại quả đó.
-       - Chỉ chọn 1 quả trứng tối ưu nhất mỗi lượt, không dịch chuyển liên tục nhiều quả gây giật lag.
-       - Hỗ trợ Auto Return: Tự động bay về vị trí máy ấp ban đầu sau khi mua xong.
-    2. CHỈ QUÉT ĐÚNG TRỨNG TRÊN DÒNG SÔNG (RIVER SCANNER):
-       - Bộ lọc loại trừ 100% các quả trứng nằm trong máy ấp, plot, base hoặc shop của người chơi khác.
-       - Loại trừ các ProximityPrompt của máy (Pull Lever, Hatch, Ấp, Gạt cần).
-       - Đối chiếu vị trí với lòng sông / băng chuyền / độ cao sông để không dịch chuyển lung tung.
-    3. CÔNG CỤ TEST & DEBUG KIỂM TRA TRỰC TIẾP TRÊN MENU:
-       - Nút [📍 Dịch chuyển thử 1 lần] để kiểm tra cơ chế mua ngay lập tức.
-       - Nút [🔍 Kiểm tra & quét sông] báo cáo số lượng trứng hợp lệ và trứng bị loại trừ.
+    TÍNH NĂNG MỚI V2.2:
+    1. 💰 AUTO BÁN TRỨNG CHỈ ĐƯỢC BÁN (SELECTIVE AUTO SELL):
+       - Tự động bán trứng trong túi / cầm trên tay khi đủ điều kiện.
+       - BỘ LỌC BẢO VỆ NGHIÊM NGẶT: Chỉ bán đúng các độ hiếm được người dùng chọn (mặc định chỉ bán Common, Uncommon, Rare).
+       - Khóa an toàn 100% không bao giờ bán trứng xịn (Epic, Legendary, Mythic, Divine, Secret).
+       - Tự động kích hoạt: Remote bán + Chạm ô Sell Zone / Pad + Prompt NPC Sell + Nút bán trong GUI.
+       - Nút [💰 Bán ngay lập tức (Sell Now)] hỗ trợ bán nhanh chỉ 1 chạm.
+    2. 🌊 AUTO MUA TRỨNG TRÊN SÔNG (RIVER EGG AUTO-BUY):
+       - Chỉ dịch chuyển đúng 1 lần duy nhất cho mỗi quả trứng (Memory Blacklist).
+       - Chỉ quét trứng trên dòng sông, tuyệt đối không dịch chuyển vào máy ấp hay plot người khác.
+       - Tự động quay về chỗ cũ (Auto Return To Base) sau khi mua.
+    3. 🧪 DEBUG & TEST CÔNG CỤ TRỰC TIẾP TRÊN MENU.
     ===================================================================
 --]]
 
@@ -73,6 +72,7 @@ end)
 
 -- ── State Management ──
 local State = {
+    -- 1. River Egg Buy
     AutoBuyRiverEggs = false,
     MinRiverRarityIndex = 4, -- Default Epic+
     AutoTpToRiverEgg = true,
@@ -88,6 +88,21 @@ local State = {
         Divine = true,
         Secret = true
     },
+
+    -- 2. Selective Auto Sell (Chỉ được bán các độ hiếm chọn)
+    AutoSellEggs = false,
+    SellRarities = {
+        Common = true,      -- Mặc định cho phép bán
+        Uncommon = true,    -- Mặc định cho phép bán
+        Rare = true,        -- Mặc định cho phép bán
+        Epic = false,       -- Mặc định KHÓA bảo vệ
+        Legendary = false,  -- Mặc định KHÓA bảo vệ
+        Mythic = false,     -- Mặc định KHÓA bảo vệ
+        Divine = false,     -- Mặc định KHÓA bảo vệ
+        Secret = false      -- Mặc định KHÓA bảo vệ
+    },
+
+    -- 3. Utility
     AntiAFK = true
 }
 
@@ -105,13 +120,14 @@ local MinRarityPresets = {
 -- ── Memory System (Chống dịch chuyển lặp lại) ──
 local ProcessedRiverEggs = {} -- [Instance] = os.clock()
 local PurchasedCount = 0
+local SoldCount = 0
 local CachedRemotes = {}
 local isBuyingActive = false
+local isSellingActive = false
 
 local function isEggProcessed(obj)
     if not obj then return true end
     if ProcessedRiverEggs[obj] then
-        -- Cooldown: lưu nhớ trong 90s (cho đến khi trứng trôi hết hoặc bị xóa)
         if (os.clock() - ProcessedRiverEggs[obj]) < 90 then
             return true
         end
@@ -128,7 +144,7 @@ end
 
 -- ── Status Label Callbacks ──
 local updateStatusUI = function(msg) end
-local updateEggCountUI = function(count, bestEgg, boughtTotal) end
+local updateEggCountUI = function(count, bestEgg, boughtTotal, soldTotal) end
 
 local function setStatus(msg)
     pcall(function()
@@ -378,10 +394,9 @@ local function getRiverEggs()
     end
 
     pcall(function()
-        updateEggCountUI(totalEggsFound, highestEggFound or "Chưa có", PurchasedCount)
+        updateEggCountUI(totalEggsFound, highestEggFound or "Chưa có", PurchasedCount, SoldCount)
     end)
 
-    -- Sắp xếp ưu tiên độ hiếm cao nhất lên đầu
     table.sort(riverEggs, function(a, b)
         return a.Rank > b.Rank
     end)
@@ -406,7 +421,6 @@ local function buySingleRiverEgg(eggData, isManualTest)
         return false
     end
 
-    -- Ghi nhớ ngay lập tức để không bao giờ chọn lại quả này nữa
     markEggProcessed(obj)
 
     local originalCFrame = hrp.CFrame
@@ -416,7 +430,6 @@ local function buySingleRiverEgg(eggData, isManualTest)
     if State.AutoTpToRiverEgg or isManualTest then
         setStatus("🚀 Bay đến trứng sông: " .. obj.Name .. " [" .. eggData.Rarity .. "] (1 Lần)")
         
-        -- Dịch chuyển cách trứng 3.2 studs phía trên an toàn
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 3.2, 0))
         didTeleport = true
@@ -470,8 +483,148 @@ local function buySingleRiverEgg(eggData, isManualTest)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- ⚙️ BACKGROUND RIVER EGG BUYING LOOP (CHỈ MUA 1 QUẢ MỖI LƯỢT)
+-- 💰 ENGINE AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN CÁC ĐỘ HIẾM ĐÃ CHỌN)
 -- ═══════════════════════════════════════════════════════════
+
+-- Tìm các khu vực Sell Pad / Sell Zone trên bản đồ
+local function getSellZones()
+    local zones = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj:FindFirstAncestorOfClass("Player") then
+            local n = obj.Name:lower()
+            if n:find("sell") or n:find("bán") or n:find("deposit") or n:find("cashin") then
+                table.insert(zones, obj)
+            end
+        end
+    end
+    return zones
+end
+
+-- Tìm các quả trứng trong túi / trên tay thỏa mãn điều kiện CHỈ ĐƯỢC BÁN
+local function getSellableItems()
+    local sellable = {}
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local char = LocalPlayer.Character
+    local sources = {backpack, char}
+
+    for _, container in ipairs(sources) do
+        if container then
+            for _, item in ipairs(container:GetChildren()) do
+                if item:IsA("Tool") or item:IsA("Model") or item:IsA("Folder") then
+                    local rarityName, rank = evaluateEggRarity(item)
+                    -- Kiểm tra nghiêm ngặt: Có nằm trong danh sách ĐƯỢC PHÉP BÁN không?
+                    if State.SellRarities[rarityName] == true then
+                        table.insert(sellable, {
+                            Instance = item,
+                            Rarity = rarityName,
+                            Rank = rank
+                        })
+                    end
+                end
+            end
+        end
+    end
+    return sellable
+end
+
+-- Thực hiện quy trình bán an toàn (Chỉ bán trứng được chọn)
+local function executeSell()
+    if isSellingActive then return end
+    isSellingActive = true
+
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+    local sellableItems = getSellableItems()
+
+    -- 1. Cầm các item thỏa mãn điều kiện lên tay để bán
+    for _, sItem in ipairs(sellableItems) do
+        local tool = sItem.Instance
+        if tool:IsA("Tool") and hum and tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
+            pcall(function()
+                hum:EquipTool(tool)
+            end)
+            task.wait(0.04)
+        end
+    end
+
+    -- 2. Chạm vào tất cả các ô Sell Zone / Sell Pad (firetouchinterest)
+    if hrp then
+        local sellZones = getSellZones()
+        for _, zone in ipairs(sellZones) do
+            pcall(function()
+                if firetouchinterest then
+                    firetouchinterest(hrp, zone, 0)
+                    task.wait(0.01)
+                    firetouchinterest(hrp, zone, 1)
+                end
+            end)
+        end
+    end
+
+    -- 3. Bắn các Remote Bán trứng an toàn
+    local sellRemote = findRemote({"sellegg", "selleggs", "sellall", "sell", "sellinv", "sellinventory", "sellitem", "cashin"})
+    if sellRemote then
+        pcall(function()
+            if sellRemote:IsA("RemoteEvent") then
+                -- Bắn bán từng item cụ thể đã lọc
+                for _, sItem in ipairs(sellableItems) do
+                    sellRemote:FireServer(sItem.Instance)
+                    sellRemote:FireServer(sItem.Instance.Name)
+                end
+                -- Bắn bán chung
+                sellRemote:FireServer()
+                sellRemote:FireServer("Sell")
+            elseif sellRemote:IsA("RemoteFunction") then
+                for _, sItem in ipairs(sellableItems) do
+                    sellRemote:InvokeServer(sItem.Instance)
+                end
+                sellRemote:InvokeServer()
+            end
+        end)
+    end
+
+    -- 4. Kích hoạt các ProximityPrompt bán trứng của NPC / Máy bán
+    for _, prompt in ipairs(Workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") then
+            local act = (prompt.ActionText or ""):lower()
+            local oText = (prompt.ObjectText or ""):lower()
+            if act:find("sell") or act:find("bán") or oText:find("sell") or oText:find("bán") then
+                triggerPrompt(prompt)
+            end
+        end
+    end
+
+    -- 5. Kích hoạt nút Sell trong PlayerGui nếu có
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, btn in ipairs(pGui:GetDescendants()) do
+            if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible and not btn:IsDescendantOf(ScreenGui) then
+                local bName = btn.Name:lower()
+                local bText = btn:IsA("TextButton") and btn.Text:lower() or ""
+                if bName:find("sell") or bName:find("bán") or bText:find("sell") or bText:find("bán") then
+                    if firesignal then
+                        firesignal(btn.MouseButton1Click)
+                        firesignal(btn.Activated)
+                    end
+                end
+            end
+        end
+    end
+
+    SoldCount = SoldCount + 1
+    setStatus("💰 Đã kích hoạt bán trứng (Chỉ bán các độ hiếm được chọn)!")
+
+    task.wait(0.3)
+    isSellingActive = false
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- ⚙️ BACKGROUND LOOPS
+-- ═══════════════════════════════════════════════════════════
+
+-- 1. Auto Buy River Eggs Loop
 task.spawn(function()
     while true do
         task.wait(0.35)
@@ -484,12 +637,11 @@ task.spawn(function()
                     return
                 end
 
-                -- Tìm quả trứng hợp lệ đầu tiên chưa từng được xử lý
                 local targetEgg = nil
                 for _, eggData in ipairs(eggs) do
                     if not isEggProcessed(eggData.Instance) then
                         targetEgg = eggData
-                        break -- Chỉ lấy đúng 1 quả tốt nhất, không lặp qua tất cả
+                        break
                     end
                 end
 
@@ -501,8 +653,20 @@ task.spawn(function()
     end
 end)
 
+-- 2. Auto Sell Eggs Loop (Chạy chu kỳ 1.5 giây)
+task.spawn(function()
+    while true do
+        task.wait(1.5)
+        if State.AutoSellEggs and not isSellingActive then
+            pcall(function()
+                executeSell()
+            end)
+        end
+    end
+end)
+
 -- ═══════════════════════════════════════════════════════════
--- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY HUB UI V2.1)
+-- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.2)
 -- ═══════════════════════════════════════════════════════════
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -514,8 +678,8 @@ ScreenGui.Parent = getGuiContainer()
 -- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 480)
-MainFrame.Position = UDim2.new(0.5, -160, 0.18, 0)
+MainFrame.Size = UDim2.new(0, 325, 0, 480)
+MainFrame.Position = UDim2.new(0.5, -162, 0.18, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 20, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -580,7 +744,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🌊 AUTO MUA TRỨNG SÔNG V2.1"
+Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.2"
 Title.TextColor3 = Color3.fromRGB(0, 220, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 14
@@ -697,15 +861,15 @@ local StatsLabel = Instance.new("TextLabel")
 StatsLabel.Size = UDim2.new(1, -12, 1, 0)
 StatsLabel.Position = UDim2.new(0, 8, 0, 0)
 StatsLabel.BackgroundTransparency = 1
-StatsLabel.Text = "🌊 Trứng sông: [ 0 ] | Cao nhất: [ - ] | Đã mua: [ 0 ]"
+StatsLabel.Text = "🌊 Sông: [ 0 ] | [ - ] | Mua: [ 0 ] | Bán: [ 0 ]"
 StatsLabel.TextColor3 = Color3.fromRGB(0, 230, 255)
 StatsLabel.Font = Enum.Font.SourceSansBold
 StatsLabel.TextSize = 11
 StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatsLabel.Parent = StatsBanner
 
-updateEggCountUI = function(count, bestEgg, boughtTotal)
-    StatsLabel.Text = "🌊 Trứng sông: [ " .. tostring(count) .. " ] | " .. tostring(bestEgg) .. " | Đã mua: " .. tostring(boughtTotal)
+updateEggCountUI = function(count, bestEgg, boughtTotal, soldTotal)
+    StatsLabel.Text = "🌊 Sông: [" .. tostring(count) .. "] | " .. tostring(bestEgg) .. " | Mua: [" .. tostring(boughtTotal) .. "] | Bán: [" .. tostring(soldTotal) .. "]"
 end
 
 -- Status Bar
@@ -745,7 +909,7 @@ Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
 Scroll.ScrollBarThickness = 4
 Scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 210, 255)
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 690)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 1180)
 Scroll.Parent = MainFrame
 
 local UIList = Instance.new("UIListLayout")
@@ -754,12 +918,12 @@ UIList.SortOrder = Enum.SortOrder.LayoutOrder
 UIList.Parent = Scroll
 
 -- ── UI Component Helpers ──
-local function createSectionHeader(titleText)
+local function createSectionHeader(titleText, color)
     local header = Instance.new("TextLabel")
     header.Size = UDim2.new(1, 0, 0, 22)
     header.BackgroundTransparency = 1
     header.Text = " " .. titleText
-    header.TextColor3 = Color3.fromRGB(0, 230, 255)
+    header.TextColor3 = color or Color3.fromRGB(0, 230, 255)
     header.Font = Enum.Font.SourceSansBold
     header.TextSize = 13
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -767,7 +931,7 @@ local function createSectionHeader(titleText)
     return header
 end
 
-local function createToggle(title, defaultVal, callback)
+local function createToggle(title, defaultVal, callback, activeColor)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -4, 0, 34)
     frame.BackgroundColor3 = Color3.fromRGB(20, 30, 44)
@@ -789,10 +953,11 @@ local function createToggle(title, defaultVal, callback)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
+    local onCol = activeColor or Color3.fromRGB(0, 210, 255)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 42, 0, 22)
     btn.Position = UDim2.new(1, -48, 0.5, -11)
-    btn.BackgroundColor3 = defaultVal and Color3.fromRGB(0, 210, 255) or Color3.fromRGB(45, 58, 75)
+    btn.BackgroundColor3 = defaultVal and onCol or Color3.fromRGB(45, 58, 75)
     btn.Text = defaultVal and "ON" or "OFF"
     btn.TextColor3 = defaultVal and Color3.fromRGB(15, 20, 28) or Color3.fromRGB(180, 190, 200)
     btn.Font = Enum.Font.SourceSansBold
@@ -806,7 +971,7 @@ local function createToggle(title, defaultVal, callback)
     local currentVal = defaultVal
     btn.MouseButton1Click:Connect(function()
         currentVal = not currentVal
-        btn.BackgroundColor3 = currentVal and Color3.fromRGB(0, 210, 255) or Color3.fromRGB(45, 58, 75)
+        btn.BackgroundColor3 = currentVal and onCol or Color3.fromRGB(45, 58, 75)
         btn.Text = currentVal and "ON" or "OFF"
         btn.TextColor3 = currentVal and Color3.fromRGB(15, 20, 28) or Color3.fromRGB(180, 190, 200)
         pcall(callback, currentVal)
@@ -834,11 +999,13 @@ local function createActionButton(title, color, callback)
     return btn
 end
 
--- ── BUILD RIVER CONTROLS ──
+-- ═══════════════════════════════════════════════════════════
+-- ── SECTION 1: AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY) ──
+-- ═══════════════════════════════════════════════════════════
 
-createSectionHeader("🌊 ĐIỀU KHIỂN CHÍNH (MASTER CONTROLS)")
+createSectionHeader("🌊 AUTO MUA TRỨNG TRÊN SÔNG", Color3.fromRGB(0, 220, 255))
 
-createToggle("🌊 Bật Auto Mua Trứng Dòng Sông", State.AutoBuyRiverEggs, function(val)
+createToggle("🌊 Bật Auto Mua Trứng Sông", State.AutoBuyRiverEggs, function(val)
     State.AutoBuyRiverEggs = val
     setStatus(val and "🌊 Đã BẬT Auto Mua Trứng Trên Sông!" or "⏸️ Đã TẮT Auto Mua Trứng.")
 end)
@@ -877,8 +1044,61 @@ createToggle("⚡ Mua Tầm Xa Vô Hạn (Infinite Range)", State.InfiniteRiverR
     State.InfiniteRiverRange = val
 end)
 
--- SECTION 2: TEST VÀ DEBUG KIỂM TRA DỊCH CHUYỂN
-createSectionHeader("🧪 KIỂM TRA & TEST DỊCH CHUYỂN (DEBUG)")
+-- ═══════════════════════════════════════════════════════════
+-- ── SECTION 2: AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN) ──
+-- ═══════════════════════════════════════════════════════════
+
+createSectionHeader("💰 AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN)", Color3.fromRGB(255, 200, 0))
+
+createToggle("💰 Bật Auto Bán Trứng (Auto Sell)", State.AutoSellEggs, function(val)
+    State.AutoSellEggs = val
+    setStatus(val and "💰 Đã BẬT Auto Bán Trứng (Chỉ bán các độ hiếm cho phép)!" or "⏸️ Đã TẮT Auto Bán Trứng.")
+end, Color3.fromRGB(255, 200, 0))
+
+createActionButton("💰 Bán Ngay Lập Tức (Sell Now - 1 Lần)", Color3.fromRGB(150, 100, 20), function()
+    setStatus("💰 Đang thực hiện bán ngay lập tức...")
+    executeSell()
+end)
+
+createSectionHeader("🎯 DANH SÁCH CHỈ ĐƯỢC BÁN (SELL FILTERS):", Color3.fromRGB(255, 215, 0))
+
+createToggle("⚪ Bán Common (Trứng thường)", State.SellRarities.Common, function(val)
+    State.SellRarities.Common = val
+end, Color3.fromRGB(255, 200, 0))
+
+createToggle("🟢 Bán Uncommon (Trứng lục)", State.SellRarities.Uncommon, function(val)
+    State.SellRarities.Uncommon = val
+end, Color3.fromRGB(255, 200, 0))
+
+createToggle("🔵 Bán Rare (Trứng hiếm)", State.SellRarities.Rare, function(val)
+    State.SellRarities.Rare = val
+end, Color3.fromRGB(255, 200, 0))
+
+createToggle("🟣 Bán Epic (Sử thi) [Khóa an toàn]", State.SellRarities.Epic, function(val)
+    State.SellRarities.Epic = val
+end, Color3.fromRGB(255, 70, 70))
+
+createToggle("🟠 Bán Legendary [Khóa an toàn]", State.SellRarities.Legendary, function(val)
+    State.SellRarities.Legendary = val
+end, Color3.fromRGB(255, 70, 70))
+
+createToggle("🔴 Bán Mythic [Khóa an toàn]", State.SellRarities.Mythic, function(val)
+    State.SellRarities.Mythic = val
+end, Color3.fromRGB(255, 70, 70))
+
+createToggle("🟡 Bán Divine [Khóa an toàn]", State.SellRarities.Divine, function(val)
+    State.SellRarities.Divine = val
+end, Color3.fromRGB(255, 70, 70))
+
+createToggle("🌈 Bán Secret / Supreme [Khóa an toàn]", State.SellRarities.Secret, function(val)
+    State.SellRarities.Secret = val
+end, Color3.fromRGB(255, 70, 70))
+
+-- ═══════════════════════════════════════════════════════════
+-- ── SECTION 3: TEST VÀ DEBUG KIỂM TRA DỊCH CHUYỂN ──
+-- ═══════════════════════════════════════════════════════════
+
+createSectionHeader("🧪 KIỂM TRA & TEST DỊCH CHUYỂN (DEBUG)", Color3.fromRGB(0, 230, 255))
 
 createActionButton("📍 Dịch Chuyển Thử Nghiệm 1 Lần (Test TP Once)", Color3.fromRGB(30, 80, 130), function()
     setStatus("🔍 Đang tìm kiếm trứng sông hợp lệ để test dịch chuyển 1 lần...")
@@ -894,7 +1114,7 @@ end)
 
 createActionButton("🔍 Quét Kiểm Tra Dòng Sông (Debug Scan)", Color3.fromRGB(35, 50, 70), function()
     local eggs = getRiverEggs()
-    setStatus("📊 Kết quả quét: Có " .. tostring(#eggs) .. " trứng hợp lệ trên sông | Đã mua: " .. tostring(PurchasedCount))
+    setStatus("📊 Kết quả quét: Có " .. tostring(#eggs) .. " trứng hợp lệ trên sông | Đã mua: " .. tostring(PurchasedCount) .. " | Đã bán: " .. tostring(SoldCount))
 end)
 
 createActionButton("🗑️ Xóa Bộ Nhớ Trứng Đã Mua (Reset Memory)", Color3.fromRGB(70, 35, 45), function()
@@ -902,8 +1122,11 @@ createActionButton("🗑️ Xóa Bộ Nhớ Trứng Đã Mua (Reset Memory)", Co
     setStatus("🗑️ Đã xóa bộ nhớ! Script có thể quét lại các trứng cũ nếu cần.")
 end)
 
--- SECTION 3: BỘ LỌC ĐỘ HIẾM
-createSectionHeader("💎 CHỌN ĐỘ HIẾM MUỐN MUA (RARITY FILTERS)")
+-- ═══════════════════════════════════════════════════════════
+-- ── SECTION 4: BỘ LỌC ĐỘ HIẾM MUỐN MUA (BUY RARITY) ──
+-- ═══════════════════════════════════════════════════════════
+
+createSectionHeader("💎 CHỌN ĐỘ HIẾM MUỐN MUA (BUY FILTERS)", Color3.fromRGB(0, 230, 255))
 
 createToggle("⚪ Trứng Thường (Common)", State.BuyRarities.Common, function(val)
     State.BuyRarities.Common = val
@@ -937,10 +1160,14 @@ createToggle("🌈 Trứng Tối Thượng (Secret / Supreme)", State.BuyRaritie
     State.BuyRarities.Secret = val
 end)
 
-createSectionHeader("🛡️ HỖ TRỢ TREO MÁY SĂN TRỨNG")
+-- ═══════════════════════════════════════════════════════════
+-- ── SECTION 5: HỖ TRỢ TREO MÁY ──
+-- ═══════════════════════════════════════════════════════════
+
+createSectionHeader("🛡️ HỖ TRỢ TREO MÁY SĂN TRỨNG", Color3.fromRGB(0, 230, 255))
 
 createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, function(val)
     State.AntiAFK = val
 end)
 
-setStatus("Đã khởi tạo thành công River Egg Auto-Buy Hub V2.1!")
+setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.2!")
