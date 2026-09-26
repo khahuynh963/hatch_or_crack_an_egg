@@ -1,25 +1,25 @@
 --[[
     ===================================================================
-    🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.3
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA & BÁN TRỨNG THEO ĐỘ HIẾM V2.4
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
     Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    CẬP NHẬT ĐỘ HIẾM CHÍNH XÁC THEO GAME (IN-GAME INDEX):
-    1. ⚪ Thường (Common)
-    2. 🟢 Không phổ biến (Uncommon)
-    3. 🔵 Hiếm (Rare)
-    4. 🟣 Huyền tuyệt (Epic)
-    5. 🟠 Huyền thoại (Legendary)
-    6. 🔴 Huyền thoại (Mythic)
-    7. 🌈 Bật mí (Secret)
-    8. ⭐ Giới hạn (Limited)
-
-    TÍNH NĂNG V2.3:
-    - 🌊 Auto Mua Trứng Sông theo đúng độ hiếm game (chỉ bay 1 lần/quả, không bay lung tung).
-    - 💰 Auto Bán Trứng chỉ được bán theo đúng độ hiếm game (khóa an toàn Huyền tuyệt, Huyền thoại, Bật mí, Giới hạn).
-    - 🧪 Công cụ Test & Debug dịch chuyển 1 lần trực tiếp trên menu.
+    TÍNH NĂNG MỚI V2.4 (THEO 3 HÌNH ẢNH MINH HỌA CỦA GAME):
+    1. 🔥 CHU TRÌNH BÁN TẤT CẢ TRỨNG TỰ ĐỘNG CHUẨN 100% GIAO DIỆN GAME:
+       - Bước 1: Tự động bấm nút [Bán] màu xanh ở thanh menu phía trên (hoặc tương tác Thị trường trứng).
+       - Bước 2: Bấm chọn dòng [2. Bán tất cả trứng] trong bảng "Người bán trứng".
+       - Bước 3: Bấm chọn dòng xác nhận [1. Có, bán chúng đi] để hoàn tất bán sạch toàn bộ trứng lấy tiền.
+       - Hỗ trợ cả nút bấm thủ công [Bán tất cả ngay] và nút gạt tự động chạy lặp [Auto Bán Tất Cả Trứng].
+    2. 💰 AUTO BÁN THEO ĐỘ HIẾM (CHỈ ĐƯỢC BÁN):
+       - Tự lọc và chỉ bán các độ hiếm cho phép (Thường, Không phổ biến, Hiếm).
+       - Khóa an toàn không bán trứng xịn (Huyền tuyệt, Huyền thoại, Bật mí, Giới hạn).
+    3. 🌊 AUTO MUA TRỨNG TRÊN SÔNG:
+       - Chỉ dịch chuyển đúng 1 lần duy nhất cho mỗi quả trứng (Memory Blacklist).
+       - Chỉ quét trứng trên dòng sông, tuyệt đối không dịch chuyển vào máy ấp hay plot người khác.
+       - Tự động quay về chỗ cũ (Auto Return To Base) sau khi mua.
+    4. 🧪 DEBUG & TEST CÔNG CỤ TRỰC TIẾP TRÊN MENU.
     ===================================================================
 --]]
 
@@ -91,8 +91,9 @@ local State = {
         Limited = true       -- Giới hạn
     },
 
-    -- 2. Selective Auto Sell (Chỉ được bán các độ hiếm chọn)
-    AutoSellEggs = false,
+    -- 2. Sell System
+    AutoSellAllEggs = false, -- Chu trình Bán ➔ Bán tất cả trứng ➔ Có, bán chúng đi
+    AutoSellByRarity = false, -- Bán theo độ hiếm chọn
     SellRarities = {
         Common = true,       -- Thường (Tự bán)
         Uncommon = true,     -- Không phổ biến (Tự bán)
@@ -498,10 +499,176 @@ local function buySingleRiverEgg(eggData, isManualTest)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 💰 ENGINE AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN CÁC ĐỘ HIẾM ĐÃ CHỌN)
+-- 🔥 CHU TRÌNH BÁN TẤT CẢ TRỨNG (BẤM BÁN ➔ BÁN TẤT CẢ ➔ XÁC NHẬN)
 -- ═══════════════════════════════════════════════════════════
 
--- Tìm các khu vực Sell Pad / Sell Zone trên bản đồ
+-- Bước 1: Mở menu Người bán trứng (Bấm chữ [Bán] trên thanh bar hoặc tương tác Prompt)
+local function openSellMarketUI()
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pGui then return false end
+
+    local opened = false
+
+    -- Cách 1: Tìm nút chữ [Bán] màu xanh trên thanh TopBar
+    for _, btn in ipairs(pGui:GetDescendants()) do
+        if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and not btn:IsDescendantOf(ScreenGui) then
+            local text = btn:IsA("TextButton") and btn.Text or ""
+            local lowerText = text:lower():gsub("%s+", "")
+            local lowerName = btn.Name:lower()
+
+            if lowerText == "bán" or lowerText == "ban" or lowerName == "sell" or lowerName == "sellbutton" or lowerName == "btn_sell" then
+                if firesignal then
+                    firesignal(btn.MouseButton1Click)
+                    firesignal(btn.Activated)
+                end
+                opened = true
+                break
+            end
+        end
+    end
+
+    -- Cách 2: Tương tác với ProximityPrompt của Thị trường trứng (Egg Market - Sell Eggs)
+    for _, prompt in ipairs(Workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") then
+            local act = (prompt.ActionText or ""):lower()
+            local obj = (prompt.ObjectText or ""):lower()
+            if act:find("sell") or obj:find("market") or obj:find("thị trường") or act:find("bán") then
+                triggerPrompt(prompt)
+                opened = true
+                break
+            end
+        end
+    end
+
+    return opened
+end
+
+-- Bước 2: Bấm chọn dòng [2. Bán tất cả trứng] trong bảng "Người bán trứng"
+local function clickOptionSellAllEggs()
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pGui then return false end
+
+    -- Tìm theo nội dung text hiển thị
+    for _, desc in ipairs(pGui:GetDescendants()) do
+        if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and not desc:IsDescendantOf(ScreenGui) then
+            local text = desc.Text:lower()
+            if text:find("bán tất cả trứng") or text:find("ban tat ca trung") or text:find("sell all eggs") then
+                local btn = desc:IsA("TextButton") and desc or desc:FindFirstAncestorWhichIsA("TextButton") or desc:FindFirstAncestorWhichIsA("ImageButton")
+                if btn and firesignal then
+                    firesignal(btn.MouseButton1Click)
+                    firesignal(btn.Activated)
+                    return true
+                end
+            end
+        end
+    end
+
+    -- Tìm theo tên Button / Option 2 trong dialog
+    for _, desc in ipairs(pGui:GetDescendants()) do
+        if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and not desc:IsDescendantOf(ScreenGui) then
+            local n = desc.Name:lower()
+            if n == "option2" or n == "choice2" or n == "button2" or n == "2" then
+                if firesignal then
+                    firesignal(desc.MouseButton1Click)
+                    firesignal(desc.Activated)
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- Bước 3: Bấm chọn xác nhận [1. Có, bán chúng đi]
+local function clickConfirmSellAll()
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pGui then return false end
+
+    -- Tìm theo nội dung text hiển thị xác nhận
+    for _, desc in ipairs(pGui:GetDescendants()) do
+        if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and not desc:IsDescendantOf(ScreenGui) then
+            local text = desc.Text:lower()
+            if text:find("có, bán chúng đi") or text:find("co, ban chung di") or text:find("bán chúng đi") or text:find("yes, sell them") then
+                local btn = desc:IsA("TextButton") and desc or desc:FindFirstAncestorWhichIsA("TextButton") or desc:FindFirstAncestorWhichIsA("ImageButton")
+                if btn and firesignal then
+                    firesignal(btn.MouseButton1Click)
+                    firesignal(btn.Activated)
+                    return true
+                end
+            end
+        end
+    end
+
+    -- Tìm theo tên Option 1 / Confirm Button
+    for _, desc in ipairs(pGui:GetDescendants()) do
+        if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and not desc:IsDescendantOf(ScreenGui) then
+            local n = desc.Name:lower()
+            if n == "option1" or n == "choice1" or n == "button1" or n == "confirm" or n == "yes" then
+                if firesignal then
+                    firesignal(desc.MouseButton1Click)
+                    firesignal(desc.Activated)
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- Toàn bộ chu trình Bán Tất Cả Trứng
+local function executeSellAllFlow()
+    if isSellingActive then return false end
+    isSellingActive = true
+
+    setStatus("💰 [Bước 1/3] Đang bấm nút [Bán] trên thanh công cụ...")
+    openSellMarketUI()
+    task.wait(0.2)
+
+    setStatus("💰 [Bước 2/3] Đang chọn [2. Bán tất cả trứng]...")
+    local step2 = clickOptionSellAllEggs()
+    if not step2 then
+        task.wait(0.15)
+        step2 = clickOptionSellAllEggs()
+    end
+    task.wait(0.25)
+
+    setStatus("💰 [Bước 3/3] Đang xác nhận [1. Có, bán chúng đi]...")
+    local step3 = clickConfirmSellAll()
+    if not step3 then
+        task.wait(0.15)
+        step3 = clickConfirmSellAll()
+    end
+
+    -- Bắn Remote dự phòng nếu có
+    local sellAllRemote = findRemote({"sellall", "sellegg", "selleggs", "dialogue", "eggmarket", "selleverything", "sellinv"})
+    if sellAllRemote then
+        pcall(function()
+            if sellAllRemote:IsA("RemoteEvent") then
+                sellAllRemote:FireServer(2)
+                sellAllRemote:FireServer("SellAllEggs")
+                sellAllRemote:FireServer(1)
+                sellAllRemote:FireServer(true)
+            elseif sellAllRemote:IsA("RemoteFunction") then
+                sellAllRemote:InvokeServer(2)
+                sellAllRemote:InvokeServer(1)
+            end
+        end)
+    end
+
+    SoldCount = SoldCount + 1
+    setStatus("✅ ĐÃ BÁN TẤT CẢ TRỨNG THÀNH CÔNG! (Bán ➔ Bán tất cả ➔ Có, bán chúng đi)")
+    
+    task.wait(0.3)
+    isSellingActive = false
+    return true
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- 💰 BÁN THEO ĐỘ HIẾM CHỌN (SELECTIVE SELL)
+-- ═══════════════════════════════════════════════════════════
+
 local function getSellZones()
     local zones = {}
     for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -515,7 +682,6 @@ local function getSellZones()
     return zones
 end
 
--- Tìm các quả trứng trong túi / trên tay thỏa mãn điều kiện CHỈ ĐƯỢC BÁN
 local function getSellableItems()
     local sellable = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -542,8 +708,7 @@ local function getSellableItems()
     return sellable
 end
 
--- Thực hiện quy trình bán an toàn (Chỉ bán trứng được chọn)
-local function executeSell()
+local function executeSelectiveSell()
     if isSellingActive then return end
     isSellingActive = true
 
@@ -553,7 +718,6 @@ local function executeSell()
 
     local sellableItems = getSellableItems()
 
-    -- 1. Cầm các item thỏa mãn điều kiện lên tay để bán
     for _, sItem in ipairs(sellableItems) do
         local tool = sItem.Instance
         if tool:IsA("Tool") and hum and tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
@@ -564,7 +728,6 @@ local function executeSell()
         end
     end
 
-    -- 2. Chạm vào tất cả các ô Sell Zone / Sell Pad (firetouchinterest)
     if hrp then
         local sellZones = getSellZones()
         for _, zone in ipairs(sellZones) do
@@ -578,7 +741,6 @@ local function executeSell()
         end
     end
 
-    -- 3. Bắn các Remote Bán trứng an toàn
     local sellRemote = findRemote({"sellegg", "selleggs", "sellall", "sell", "sellinv", "sellinventory", "sellitem", "cashin"})
     if sellRemote then
         pcall(function()
@@ -598,36 +760,8 @@ local function executeSell()
         end)
     end
 
-    -- 4. Kích hoạt các ProximityPrompt bán trứng của NPC / Máy bán
-    for _, prompt in ipairs(Workspace:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") then
-            local act = (prompt.ActionText or ""):lower()
-            local oText = (prompt.ObjectText or ""):lower()
-            if act:find("sell") or act:find("bán") or oText:find("sell") or oText:find("bán") then
-                triggerPrompt(prompt)
-            end
-        end
-    end
-
-    -- 5. Kích hoạt nút Sell trong PlayerGui nếu có
-    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if pGui then
-        for _, btn in ipairs(pGui:GetDescendants()) do
-            if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible and not btn:IsDescendantOf(ScreenGui) then
-                local bName = btn.Name:lower()
-                local bText = btn:IsA("TextButton") and btn.Text:lower() or ""
-                if bName:find("sell") or bName:find("bán") or bText:find("sell") or bText:find("bán") then
-                    if firesignal then
-                        firesignal(btn.MouseButton1Click)
-                        firesignal(btn.Activated)
-                    end
-                end
-            end
-        end
-    end
-
     SoldCount = SoldCount + 1
-    setStatus("💰 Đã kích hoạt bán trứng (Chỉ bán các độ hiếm được chọn)!")
+    setStatus("💰 Đã kích hoạt bán trứng theo độ hiếm chọn!")
 
     task.wait(0.3)
     isSellingActive = false
@@ -666,20 +800,32 @@ task.spawn(function()
     end
 end)
 
--- 2. Auto Sell Eggs Loop
+-- 2. Auto Sell All Eggs Loop (Chạy chu trình Bán ➔ Bán tất cả ➔ Xác nhận mỗi 3.5s)
 task.spawn(function()
     while true do
-        task.wait(1.5)
-        if State.AutoSellEggs and not isSellingActive then
+        task.wait(3.5)
+        if State.AutoSellAllEggs and not isSellingActive then
             pcall(function()
-                executeSell()
+                executeSellAllFlow()
+            end)
+        end
+    end
+end)
+
+-- 3. Auto Selective Sell Loop (Bán theo độ hiếm chọn mỗi 2.0s)
+task.spawn(function()
+    while true do
+        task.wait(2.0)
+        if State.AutoSellByRarity and not isSellingActive then
+            pcall(function()
+                executeSelectiveSell()
             end)
         end
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.3)
+-- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY & SELL HUB UI V2.4)
 -- ═══════════════════════════════════════════════════════════
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -757,7 +903,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.3"
+Title.Text = "🌊 MUA & BÁN TRỨNG SÔNG V2.4"
 Title.TextColor3 = Color3.fromRGB(0, 220, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 14
@@ -922,7 +1068,7 @@ Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
 Scroll.ScrollBarThickness = 4
 Scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 210, 255)
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 1180)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 1320)
 Scroll.Parent = MainFrame
 
 local UIList = Instance.new("UIListLayout")
@@ -1013,7 +1159,22 @@ local function createActionButton(title, color, callback)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- ── SECTION 1: AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY) ──
+-- ── SECTION 1: BÁN TẤT CẢ TRỨNG (THEO 3 HÌNH GAME) ──
+-- ═══════════════════════════════════════════════════════════
+
+createSectionHeader("🔥 BÁN TẤT CẢ TRỨNG (CHUẨN MENU GAME)", Color3.fromRGB(255, 170, 0))
+
+createActionButton("🔥 BÁN TẤT CẢ TRỨNG NGAY (SELL ALL NOW)", Color3.fromRGB(180, 60, 20), function()
+    executeSellAllFlow()
+end)
+
+createToggle("⚡ Auto Bán Tất Cả Trứng (Tự Bán ➔ Xác Nhận)", State.AutoSellAllEggs, function(val)
+    State.AutoSellAllEggs = val
+    setStatus(val and "⚡ Đã BẬT Auto Bán Tất Cả Trứng (Chu trình Bán ➔ Bán tất cả ➔ Xác nhận)!" or "⏸️ Đã TẮT Auto Bán Tất Cả.")
+end, Color3.fromRGB(255, 170, 0))
+
+-- ═══════════════════════════════════════════════════════════
+-- ── SECTION 2: AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY) ──
 -- ═══════════════════════════════════════════════════════════
 
 createSectionHeader("🌊 AUTO MUA TRỨNG TRÊN SÔNG", Color3.fromRGB(0, 220, 255))
@@ -1058,19 +1219,19 @@ createToggle("⚡ Mua Tầm Xa Vô Hạn (Infinite Range)", State.InfiniteRiverR
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- ── SECTION 2: AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN) ──
+-- ── SECTION 3: BÁN THEO ĐỘ HIẾM CHỌN (CHỈ ĐƯỢC BÁN) ──
 -- ═══════════════════════════════════════════════════════════
 
-createSectionHeader("💰 AUTO BÁN TRỨNG (CHỈ ĐƯỢC BÁN)", Color3.fromRGB(255, 200, 0))
+createSectionHeader("💰 BÁN THEO ĐỘ HIẾM (CHỈ ĐƯỢC BÁN)", Color3.fromRGB(255, 200, 0))
 
-createToggle("💰 Bật Auto Bán Trứng (Auto Sell)", State.AutoSellEggs, function(val)
-    State.AutoSellEggs = val
-    setStatus(val and "💰 Đã BẬT Auto Bán Trứng (Chỉ bán độ hiếm cho phép)!" or "⏸️ Đã TẮT Auto Bán Trứng.")
+createToggle("💰 Bật Bán Theo Độ Hiếm Chọn", State.AutoSellByRarity, function(val)
+    State.AutoSellByRarity = val
+    setStatus(val and "💰 Đã BẬT Auto Bán Trứng (Chỉ bán độ hiếm cho phép)!" or "⏸️ Đã TẮT Bán Theo Độ Hiếm.")
 end, Color3.fromRGB(255, 200, 0))
 
-createActionButton("💰 Bán Ngay Lập Tức (Sell Now - 1 Lần)", Color3.fromRGB(150, 100, 20), function()
-    setStatus("💰 Đang thực hiện bán ngay lập tức...")
-    executeSell()
+createActionButton("💰 Bán Trứng Đã Lọc (Sell Selected Once)", Color3.fromRGB(150, 100, 20), function()
+    setStatus("💰 Đang bán các trứng theo độ hiếm cho phép...")
+    executeSelectiveSell()
 end)
 
 createSectionHeader("🎯 ĐỘ HIẾM CHỈ ĐƯỢC BÁN (THEO GAME):", Color3.fromRGB(255, 215, 0))
@@ -1108,7 +1269,7 @@ createToggle("⭐ Bán Giới hạn (Limited) [Khóa an toàn]", State.SellRarit
 end, Color3.fromRGB(255, 70, 70))
 
 -- ═══════════════════════════════════════════════════════════
--- ── SECTION 3: TEST VÀ DEBUG KIỂM TRA DỊCH CHUYỂN ──
+-- ── SECTION 4: TEST VÀ DEBUG KIỂM TRA DỊCH CHUYỂN ──
 -- ═══════════════════════════════════════════════════════════
 
 createSectionHeader("🧪 KIỂM TRA & TEST DỊCH CHUYỂN (DEBUG)", Color3.fromRGB(0, 230, 255))
@@ -1136,7 +1297,7 @@ createActionButton("🗑️ Xóa Bộ Nhớ Trứng Đã Mua (Reset Memory)", Co
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- ── SECTION 4: BỘ LỌC ĐỘ HIẾM MUỐN MUA (BUY FILTERS) ──
+-- ── SECTION 5: BỘ LỌC ĐỘ HIẾM MUỐN MUA (BUY FILTERS) ──
 -- ═══════════════════════════════════════════════════════════
 
 createSectionHeader("💎 ĐỘ HIẾM MUỐN MUA (THEO GAME)", Color3.fromRGB(0, 230, 255))
@@ -1174,7 +1335,7 @@ createToggle("⭐ Giới hạn (Limited)", State.BuyRarities.Limited, function(v
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- ── SECTION 5: HỖ TRỢ TREO MÁY ──
+-- ── SECTION 6: HỖ TRỢ TREO MÁY ──
 -- ═══════════════════════════════════════════════════════════
 
 createSectionHeader("🛡️ HỖ TRỢ TREO MÁY SĂN TRỨNG", Color3.fromRGB(0, 230, 255))
@@ -1183,4 +1344,4 @@ createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, functi
     State.AntiAFK = val
 end)
 
-setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.3!")
+setStatus("Đã khởi tạo thành công River Egg Auto-Buy & Sell Hub V2.4!")
