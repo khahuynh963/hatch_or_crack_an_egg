@@ -1,19 +1,24 @@
 --[[
     ===================================================================
-    🌊 HATCH OR CRACK AN EGG! - AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY HUB)
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA TRỨNG TRÊN SÔNG V2.1 (CHUYÊN BIỆT)
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
     Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    TÍNH NĂNG CHUYÊN BIỆT:
-    - Quét & nhận diện toàn bộ trứng đang trôi trên dòng sông / băng chuyền.
-    - Phân loại 8 bậc độ hiếm: Common, Uncommon, Rare, Epic, Legendary, Mythic, Divine, Secret / Supreme.
-    - Lọc theo ngưỡng tối thiểu (Min Rarity) & Bật/Tắt riêng từng bậc độ hiếm.
-    - Mua tầm xa vô hạn (Infinite Range ProximityPrompt 0s Hold).
-    - Tự động bay cạnh trứng (Auto Teleport) để mua thành công 100%.
-    - Tự động bỏ qua trứng trong máy ấp của người chơi khác.
-    - Anti-AFK 24/7 tích hợp chống văng game khi treo máy săn trứng.
+    CẢI TIẾN V2.1 THEO YÊU CẦU:
+    1. KIỂM SOÁT DỊCH CHUYỂN CHẶT CHẼ:
+       - Chỉ dịch chuyển đúng 1 LẦN duy nhất cho mỗi quả trứng.
+       - Ghi nhớ lịch sử trứng đã mua (Memory Blacklist), tuyệt đối không dịch chuyển lại quả đó.
+       - Chỉ chọn 1 quả trứng tối ưu nhất mỗi lượt, không dịch chuyển liên tục nhiều quả gây giật lag.
+       - Hỗ trợ Auto Return: Tự động bay về vị trí máy ấp ban đầu sau khi mua xong.
+    2. CHỈ QUÉT ĐÚNG TRỨNG TRÊN DÒNG SÔNG (RIVER SCANNER):
+       - Bộ lọc loại trừ 100% các quả trứng nằm trong máy ấp, plot, base hoặc shop của người chơi khác.
+       - Loại trừ các ProximityPrompt của máy (Pull Lever, Hatch, Ấp, Gạt cần).
+       - Đối chiếu vị trí với lòng sông / băng chuyền / độ cao sông để không dịch chuyển lung tung.
+    3. CÔNG CỤ TEST & DEBUG KIỂM TRA TRỰC TIẾP TRÊN MENU:
+       - Nút [📍 Dịch chuyển thử 1 lần] để kiểm tra cơ chế mua ngay lập tức.
+       - Nút [🔍 Kiểm tra & quét sông] báo cáo số lượng trứng hợp lệ và trứng bị loại trừ.
     ===================================================================
 --]]
 
@@ -70,7 +75,8 @@ end)
 local State = {
     AutoBuyRiverEggs = false,
     MinRiverRarityIndex = 4, -- Default Epic+
-    AutoTpToRiverEgg = false,
+    AutoTpToRiverEgg = true,
+    AutoReturnToBase = true, -- Tự động quay về chỗ cũ sau khi mua
     InfiniteRiverRange = true,
     BuyRarities = {
         Common = false,
@@ -96,11 +102,33 @@ local MinRarityPresets = {
     {Name = "🌈 Secret / Supreme Only", Rank = 8}
 }
 
+-- ── Memory System (Chống dịch chuyển lặp lại) ──
+local ProcessedRiverEggs = {} -- [Instance] = os.clock()
+local PurchasedCount = 0
 local CachedRemotes = {}
+local isBuyingActive = false
+
+local function isEggProcessed(obj)
+    if not obj then return true end
+    if ProcessedRiverEggs[obj] then
+        -- Cooldown: lưu nhớ trong 90s (cho đến khi trứng trôi hết hoặc bị xóa)
+        if (os.clock() - ProcessedRiverEggs[obj]) < 90 then
+            return true
+        end
+    end
+    return false
+end
+
+local function markEggProcessed(obj)
+    if obj then
+        ProcessedRiverEggs[obj] = os.clock()
+        PurchasedCount = PurchasedCount + 1
+    end
+end
 
 -- ── Status Label Callbacks ──
 local updateStatusUI = function(msg) end
-local updateEggCountUI = function(count, bestEgg) end
+local updateEggCountUI = function(count, bestEgg, boughtTotal) end
 
 local function setStatus(msg)
     pcall(function()
@@ -174,22 +202,27 @@ local function triggerPrompt(prompt)
     end)
 end
 
--- ── Player Machine / Plot Detector (Exclude Eggs in Machines) ──
-local function getMachinesAndPlots()
-    local machines = {}
-    local searchRoots = {"Plots", "Bases", "Tycoons", "Machines", "Incubators"}
-    for _, rootName in ipairs(searchRoots) do
-        local container = Workspace:FindFirstChild(rootName)
-        if container then
-            for _, item in ipairs(container:GetChildren()) do
-                table.insert(machines, item)
+-- ── Lọc và phát hiện các khu vực máy / plot của người chơi ──
+local function getExcludedContainers()
+    local excluded = {}
+    local blacklistNames = {
+        "plot", "base", "tycoon", "machine", "incubator", "nest", 
+        "shop", "stand", "display", "statue", "leaderboard", "lobby", "spawn"
+    }
+
+    for _, desc in ipairs(Workspace:GetChildren()) do
+        local n = desc.Name:lower()
+        for _, bName in ipairs(blacklistNames) do
+            if n:find(bName) then
+                table.insert(excluded, desc)
+                break
             end
         end
     end
-    return machines
+    return excluded
 end
 
--- ── Evaluate Egg Rarity on River / Conveyor ──
+-- ── Đánh giá độ hiếm của quả trứng ──
 local function evaluateEggRarity(obj)
     local bestRank = 1
     local bestRarityName = "Common"
@@ -214,17 +247,14 @@ local function evaluateEggRarity(obj)
         end
     end
 
-    -- 1. Check Name
     checkText(obj.Name)
 
-    -- 2. Check ProximityPrompt Text
     local prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ProximityPrompt", true))
     if prompt then
         checkText(prompt.ObjectText)
         checkText(prompt.ActionText)
     end
 
-    -- 3. Check Child UI TextLabels
     for _, desc in ipairs(obj:GetDescendants()) do
         if desc:IsA("TextLabel") or desc:IsA("TextButton") then
             checkText(desc.Text)
@@ -233,7 +263,6 @@ local function evaluateEggRarity(obj)
         end
     end
 
-    -- 4. Check Attributes
     pcall(function()
         for attrName, attrVal in pairs(obj:GetAttributes()) do
             checkText(tostring(attrName))
@@ -244,10 +273,68 @@ local function evaluateEggRarity(obj)
     return bestRarityName, bestRank
 end
 
--- ── Scan River / Conveyor Eggs ──
+-- ── Kiểm tra nghiêm ngặt: Có đúng là trứng trên dòng sông không? ──
+local function verifyRiverEgg(obj, excludedList)
+    if not obj or not obj.Parent then return false, "No parent" end
+    if isEggProcessed(obj) then return false, "Already processed" end
+
+    -- Không phải là nhân vật người chơi
+    if obj:FindFirstAncestorOfClass("Player") then
+        return false, "In player character"
+    end
+
+    -- 1. Kiểm tra toàn bộ cây tổ tiên (Tránh plot, máy ấp, shop)
+    local cur = obj.Parent
+    while cur and cur ~= Workspace do
+        local cName = cur.Name:lower()
+        if cName:find("machine") or cName:find("incubator") or cName:find("nest") 
+           or cName:find("plot") or cName:find("base") or cName:find("tycoon") 
+           or cName:find("gear") or cName:find("shop") or cName:find("stand") 
+           or cName:find("display") or cName:find("leaderboard") or cName:find("statue")
+           or cName:find("spawn") then
+            return false, "In machine/plot: " .. cur.Name
+        end
+        for _, ex in ipairs(excludedList) do
+            if cur == ex then
+                return false, "In excluded container: " .. ex.Name
+            end
+        end
+        cur = cur.Parent
+    end
+
+    -- 2. Kiểm tra ProximityPrompt / ClickDetector
+    local prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ProximityPrompt", true))
+    local cd = obj:FindFirstChildOfClass("ClickDetector") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ClickDetector", true))
+
+    if not prompt and not cd then
+        return false, "No prompt or click detector"
+    end
+
+    -- 3. Kiểm tra nội dung Prompt: TUYỆT ĐỐI LOẠI BỎ cần gạt hoặc nút ấp máy
+    if prompt then
+        local act = (prompt.ActionText or ""):lower()
+        local objText = (prompt.ObjectText or ""):lower()
+
+        if act:find("pull") or act:find("lever") or act:find("hatch") or act:find("ấp") 
+           or act:find("gạt") or act:find("multiplier") or act:find("roll") or act:find("start")
+           or objText:find("lever") or objText:find("multiplier") or objText:find("gear") then
+            return false, "Machine prompt: " .. act
+        end
+    end
+
+    -- 4. Tìm phần Part vật lý
+    local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
+    if not part then
+        return false, "No physical part"
+    end
+
+    return true, "Valid River Egg", part, prompt, cd
+end
+
+-- ── Quét danh sách trứng thực sự đang trôi trên sông ──
 local function getRiverEggs()
     local riverEggs = {}
-    local machines = getMachinesAndPlots()
+    local excludedList = getExcludedContainers()
     local minRank = MinRarityPresets[State.MinRiverRarityIndex].Rank
 
     local totalEggsFound = 0
@@ -255,51 +342,35 @@ local function getRiverEggs()
     local highestEggRank = 0
 
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        if (obj:IsA("Model") or obj:IsA("BasePart")) and not obj:FindFirstAncestorOfClass("Player") then
+        if (obj:IsA("Model") or obj:IsA("BasePart")) then
             local oName = obj.Name:lower()
             if oName:find("egg") or oName:find("trứng") then
-                -- Check if egg is inside someone's machine / plot
-                local inMachine = false
-                for _, m in ipairs(machines) do
-                    if obj:IsDescendantOf(m) then
-                        inMachine = true
-                        break
+                local isValid, reason, part, prompt, cd = verifyRiverEgg(obj, excludedList)
+                if isValid then
+                    totalEggsFound = totalEggsFound + 1
+                    local rarityName, rank = evaluateEggRarity(obj)
+                    
+                    if rank > highestEggRank then
+                        highestEggRank = rank
+                        highestEggFound = rarityName
                     end
-                end
 
-                if not inMachine then
-                    local prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ProximityPrompt", true))
-                    local cd = obj:FindFirstChildOfClass("ClickDetector") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ClickDetector", true))
+                    local shouldBuy = false
+                    if State.BuyRarities[rarityName] then
+                        shouldBuy = true
+                    elseif rank >= minRank then
+                        shouldBuy = true
+                    end
 
-                    if prompt or cd then
-                        totalEggsFound = totalEggsFound + 1
-                        local rarityName, rank = evaluateEggRarity(obj)
-                        
-                        if rank > highestEggRank then
-                            highestEggRank = rank
-                            highestEggFound = rarityName
-                        end
-
-                        local shouldBuy = false
-                        if State.BuyRarities[rarityName] then
-                            shouldBuy = true
-                        elseif rank >= minRank then
-                            shouldBuy = true
-                        end
-
-                        if shouldBuy then
-                            local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
-                            if part then
-                                table.insert(riverEggs, {
-                                    Instance = obj,
-                                    Part = part,
-                                    Prompt = prompt,
-                                    ClickDetector = cd,
-                                    Rarity = rarityName,
-                                    Rank = rank
-                                })
-                            end
-                        end
+                    if shouldBuy then
+                        table.insert(riverEggs, {
+                            Instance = obj,
+                            Part = part,
+                            Prompt = prompt,
+                            ClickDetector = cd,
+                            Rarity = rarityName,
+                            Rank = rank
+                        })
                     end
                 end
             end
@@ -307,9 +378,10 @@ local function getRiverEggs()
     end
 
     pcall(function()
-        updateEggCountUI(totalEggsFound, highestEggFound or "None")
+        updateEggCountUI(totalEggsFound, highestEggFound or "Chưa có", PurchasedCount)
     end)
 
+    -- Sắp xếp ưu tiên độ hiếm cao nhất lên đầu
     table.sort(riverEggs, function(a, b)
         return a.Rank > b.Rank
     end)
@@ -317,68 +389,112 @@ local function getRiverEggs()
     return riverEggs
 end
 
+-- ── Thực hiện mua 1 quả trứng duy nhất (Chỉ bay 1 lần, không bay lung tung) ──
+local function buySingleRiverEgg(eggData, isManualTest)
+    if isBuyingActive then return false end
+    isBuyingActive = true
+
+    local obj = eggData.Instance
+    local part = eggData.Part
+    local prompt = eggData.Prompt
+    local cd = eggData.ClickDetector
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+    if not hrp or not part or not part.Parent then
+        isBuyingActive = false
+        return false
+    end
+
+    -- Ghi nhớ ngay lập tức để không bao giờ chọn lại quả này nữa
+    markEggProcessed(obj)
+
+    local originalCFrame = hrp.CFrame
+    local didTeleport = false
+
+    -- 1. DỊCH CHUYỂN ĐÚNG 1 LẦN (Nếu bật TP hoặc đang bấm nút Test)
+    if State.AutoTpToRiverEgg or isManualTest then
+        setStatus("🚀 Bay đến trứng sông: " .. obj.Name .. " [" .. eggData.Rarity .. "] (1 Lần)")
+        
+        -- Dịch chuyển cách trứng 3.2 studs phía trên an toàn
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 3.2, 0))
+        didTeleport = true
+        task.wait(0.12)
+    else
+        setStatus("⚡ Mua từ xa: " .. obj.Name .. " [" .. eggData.Rarity .. "]")
+    end
+
+    -- 2. KÍCH HOẠT PROXIMITY PROMPT
+    if prompt then
+        if State.InfiniteRiverRange then
+            prompt.RequiresLineOfSight = false
+            prompt.HoldDuration = 0
+            prompt.MaxActivationDistance = 99999
+        end
+        triggerPrompt(prompt)
+    end
+
+    -- 3. KÍCH HOẠT CLICK DETECTOR
+    if cd and fireclickdetector then
+        fireclickdetector(cd, 0)
+        fireclickdetector(cd)
+    end
+
+    -- 4. BẮN REMOTE EVENT MUA TRỨNG SÔNG
+    local buyRemote = findRemote({"buyegg", "riverbuy", "purchaseegg", "buyriver", "claimriveregg", "takeegg"})
+    if buyRemote then
+        if buyRemote:IsA("RemoteEvent") then
+            buyRemote:FireServer(obj)
+            buyRemote:FireServer(obj.Name)
+        elseif buyRemote:IsA("RemoteFunction") then
+            buyRemote:InvokeServer(obj)
+        end
+    end
+
+    task.wait(0.15)
+
+    -- 5. QUAY VỀ VỊ TRÍ CŨ NẾU BẬT AUTO RETURN
+    if didTeleport and State.AutoReturnToBase and originalCFrame then
+        setStatus("🔙 Đã mua xong! Đang quay lại vị trí ban đầu...")
+        task.wait(0.08)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.CFrame = originalCFrame
+    end
+
+    setStatus("✅ ĐÃ MUA THÀNH CÔNG: " .. obj.Name .. " [" .. eggData.Rarity .. "] (Đã ghi nhớ, không dịch chuyển lại)")
+    
+    task.wait(0.25)
+    isBuyingActive = false
+    return true
+end
+
 -- ═══════════════════════════════════════════════════════════
--- ⚙️ BACKGROUND RIVER EGG BUYING LOOP
+-- ⚙️ BACKGROUND RIVER EGG BUYING LOOP (CHỈ MUA 1 QUẢ MỖI LƯỢT)
 -- ═══════════════════════════════════════════════════════════
 task.spawn(function()
     while true do
-        task.wait(0.25)
-        if State.AutoBuyRiverEggs then
+        task.wait(0.35)
+        if State.AutoBuyRiverEggs and not isBuyingActive then
             pcall(function()
                 local eggs = getRiverEggs()
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
                 if #eggs == 0 then
-                    setStatus("🌊 Đang quét dòng sông... (Chưa có trứng phù hợp)")
+                    setStatus("🌊 Đang quan sát dòng sông... (Chưa có trứng phù hợp tiêu chí)")
+                    return
                 end
 
+                -- Tìm quả trứng hợp lệ đầu tiên chưa từng được xử lý
+                local targetEgg = nil
                 for _, eggData in ipairs(eggs) do
-                    local obj = eggData.Instance
-                    local prompt = eggData.Prompt
-                    local cd = eggData.ClickDetector
-                    local part = eggData.Part
-
-                    if hrp and part and part.Parent then
-                        -- Optional Teleport to egg
-                        if State.AutoTpToRiverEgg then
-                            local dist = (part.Position - hrp.Position).Magnitude
-                            if dist > 8 then
-                                hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 3.5, 0))
-                                task.wait(0.08)
-                            end
-                        end
-
-                        -- Trigger ProximityPrompt
-                        if prompt then
-                            if State.InfiniteRiverRange then
-                                prompt.RequiresLineOfSight = false
-                                prompt.HoldDuration = 0
-                                prompt.MaxActivationDistance = 99999
-                            end
-                            triggerPrompt(prompt)
-                        end
-
-                        -- Trigger ClickDetector
-                        if cd and fireclickdetector then
-                            fireclickdetector(cd, 0)
-                            fireclickdetector(cd)
-                        end
-
-                        -- Attempt Remote Fires
-                        local buyRemote = findRemote({"buyegg", "riverbuy", "purchaseegg", "buyriver", "claimriveregg", "takeegg"})
-                        if buyRemote then
-                            if buyRemote:IsA("RemoteEvent") then
-                                buyRemote:FireServer(obj)
-                                buyRemote:FireServer(obj.Name)
-                            elseif buyRemote:IsA("RemoteFunction") then
-                                buyRemote:InvokeServer(obj)
-                            end
-                        end
-
-                        setStatus("🌊 Đã kích hoạt mua trứng: " .. obj.Name .. " [" .. eggData.Rarity .. "]")
-                        task.wait(0.12)
+                    if not isEggProcessed(eggData.Instance) then
+                        targetEgg = eggData
+                        break -- Chỉ lấy đúng 1 quả tốt nhất, không lặp qua tất cả
                     end
+                end
+
+                if targetEgg then
+                    buySingleRiverEgg(targetEgg, false)
                 end
             end)
         end
@@ -386,7 +502,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY HUB UI)
+-- 🎨 GIAO DIỆN CHUYÊN BIỆT (RIVER EGG AUTO-BUY HUB UI V2.1)
 -- ═══════════════════════════════════════════════════════════
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -398,7 +514,7 @@ ScreenGui.Parent = getGuiContainer()
 -- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 470)
+MainFrame.Size = UDim2.new(0, 320, 0, 480)
 MainFrame.Position = UDim2.new(0.5, -160, 0.18, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 20, 30)
 MainFrame.BorderSizePixel = 0
@@ -464,10 +580,10 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🌊 AUTO MUA TRỨNG SÔNG"
+Title.Text = "🌊 AUTO MUA TRỨNG SÔNG V2.1"
 Title.TextColor3 = Color3.fromRGB(0, 220, 255)
 Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 15
+Title.TextSize = 14
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Topbar
 
@@ -581,15 +697,15 @@ local StatsLabel = Instance.new("TextLabel")
 StatsLabel.Size = UDim2.new(1, -12, 1, 0)
 StatsLabel.Position = UDim2.new(0, 8, 0, 0)
 StatsLabel.BackgroundTransparency = 1
-StatsLabel.Text = "🌊 Trứng trên sông: [ 0 ] | Cao nhất: [ Chưa có ]"
+StatsLabel.Text = "🌊 Trứng sông: [ 0 ] | Cao nhất: [ - ] | Đã mua: [ 0 ]"
 StatsLabel.TextColor3 = Color3.fromRGB(0, 230, 255)
 StatsLabel.Font = Enum.Font.SourceSansBold
-StatsLabel.TextSize = 12
+StatsLabel.TextSize = 11
 StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatsLabel.Parent = StatsBanner
 
-updateEggCountUI = function(count, bestEgg)
-    StatsLabel.Text = "🌊 Trứng trên sông: [ " .. tostring(count) .. " ] | Cao nhất: [ " .. tostring(bestEgg) .. " ]"
+updateEggCountUI = function(count, bestEgg, boughtTotal)
+    StatsLabel.Text = "🌊 Trứng sông: [ " .. tostring(count) .. " ] | " .. tostring(bestEgg) .. " | Đã mua: " .. tostring(boughtTotal)
 end
 
 -- Status Bar
@@ -609,7 +725,7 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -8, 1, 0)
 StatusLabel.Position = UDim2.new(0, 6, 0, 0)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Sẵn sàng | Đang quét trứng trên sông..."
+StatusLabel.Text = "Sẵn sàng | Đang quan sát dòng sông..."
 StatusLabel.TextColor3 = Color3.fromRGB(180, 210, 230)
 StatusLabel.Font = Enum.Font.SourceSansItalic
 StatusLabel.TextSize = 12
@@ -629,7 +745,7 @@ Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
 Scroll.ScrollBarThickness = 4
 Scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 210, 255)
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 600)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 690)
 Scroll.Parent = MainFrame
 
 local UIList = Instance.new("UIListLayout")
@@ -698,6 +814,26 @@ local function createToggle(title, defaultVal, callback)
     return frame
 end
 
+local function createActionButton(title, color, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -4, 0, 32)
+    btn.BackgroundColor3 = color or Color3.fromRGB(24, 36, 52)
+    btn.Text = title
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 12
+    btn.Parent = Scroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        pcall(callback)
+    end)
+    return btn
+end
+
 -- ── BUILD RIVER CONTROLS ──
 
 createSectionHeader("🌊 ĐIỀU KHIỂN CHÍNH (MASTER CONTROLS)")
@@ -727,15 +863,46 @@ btnMinRarity.MouseButton1Click:Connect(function()
     setStatus("🎯 Đã chọn mua trứng từ mốc: " .. r.Name)
 end)
 
-createToggle("🚀 Tự Bay Cạnh Trứng Sông (Auto TP)", State.AutoTpToRiverEgg, function(val)
+createToggle("🚀 Tự Bay Cạnh Trứng (Chỉ 1 Lần / Quả)", State.AutoTpToRiverEgg, function(val)
     State.AutoTpToRiverEgg = val
-    setStatus(val and "🚀 Đã BẬT Auto TP đến trứng sông." or "Đã TẮT Auto TP.")
+    setStatus(val and "🚀 Đã BẬT Auto TP đến trứng sông (1 lần duy nhất/quả)." or "Đã TẮT Auto TP.")
+end)
+
+createToggle("🔙 Tự Quay Về Chỗ Cũ Sau Khi Mua", State.AutoReturnToBase, function(val)
+    State.AutoReturnToBase = val
+    setStatus(val and "🔙 Đã BẬT: Mua xong sẽ tự động bay về chỗ cũ." or "Đã TẮT tự quay về.")
 end)
 
 createToggle("⚡ Mua Tầm Xa Vô Hạn (Infinite Range)", State.InfiniteRiverRange, function(val)
     State.InfiniteRiverRange = val
 end)
 
+-- SECTION 2: TEST VÀ DEBUG KIỂM TRA DỊCH CHUYỂN
+createSectionHeader("🧪 KIỂM TRA & TEST DỊCH CHUYỂN (DEBUG)")
+
+createActionButton("📍 Dịch Chuyển Thử Nghiệm 1 Lần (Test TP Once)", Color3.fromRGB(30, 80, 130), function()
+    setStatus("🔍 Đang tìm kiếm trứng sông hợp lệ để test dịch chuyển 1 lần...")
+    local eggs = getRiverEggs()
+    if #eggs > 0 then
+        local target = eggs[1]
+        setStatus("🎯 Tìm thấy: " .. target.Instance.Name .. " [" .. target.Rarity .. "]. Đang test...")
+        buySingleRiverEgg(target, true)
+    else
+        setStatus("⚠️ Hiện chưa có quả trứng hợp lệ nào trên sông để test!")
+    end
+end)
+
+createActionButton("🔍 Quét Kiểm Tra Dòng Sông (Debug Scan)", Color3.fromRGB(35, 50, 70), function()
+    local eggs = getRiverEggs()
+    setStatus("📊 Kết quả quét: Có " .. tostring(#eggs) .. " trứng hợp lệ trên sông | Đã mua: " .. tostring(PurchasedCount))
+end)
+
+createActionButton("🗑️ Xóa Bộ Nhớ Trứng Đã Mua (Reset Memory)", Color3.fromRGB(70, 35, 45), function()
+    ProcessedRiverEggs = {}
+    setStatus("🗑️ Đã xóa bộ nhớ! Script có thể quét lại các trứng cũ nếu cần.")
+end)
+
+-- SECTION 3: BỘ LỌC ĐỘ HIẾM
 createSectionHeader("💎 CHỌN ĐỘ HIẾM MUỐN MUA (RARITY FILTERS)")
 
 createToggle("⚪ Trứng Thường (Common)", State.BuyRarities.Common, function(val)
@@ -776,4 +943,4 @@ createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, functi
     State.AntiAFK = val
 end)
 
-setStatus("Đã khởi tạo thành công River Egg Auto-Buy Hub!")
+setStatus("Đã khởi tạo thành công River Egg Auto-Buy Hub V2.1!")
