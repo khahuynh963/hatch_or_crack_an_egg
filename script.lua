@@ -1,21 +1,17 @@
 --[[
     ===================================================================
-    🥚 HATCH OR CRACK AN EGG! (ẤP HOẶC NỨT MỘT QUẢ TRỨNG) - ULTIMATE AUTO HUB V1.0
+    🥚 HATCH OR CRACK AN EGG! (ẤP HOẶC NỨT MỘT QUẢ TRỨNG) - ULTIMATE AUTO HUB V2.0
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Tương thích 100% với Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    Tính năng cốt lõi:
-    1. 🎰 Smart Auto Multiplier Farm (Tự gạt cần nâng hệ số x1.0 -> x1,000)
-    2. 💰 Auto Cash Out / Hatch (Tự động ấp chốt lời đúng hệ số mục tiêu, tránh nứt vỡ)
-    3. 🥚 Auto Start New Egg (Tự động nạp trứng mới ngay khi nở hoặc vỡ để treo máy 24/7)
-    4. 🎯 Bộ Chiến Lược Mục Tiêu: An toàn (x2.0), Cân bằng (x3.0), Mạo hiểm (x5.0), Jackpot (x10 -> x100)
-    5. ⚡ Instant ProximityPrompt (0s Hold cần gạt và nút ấp trứng)
-    6. 🧲 Auto Collect Cash & Rewards (Tự hút tiền, kim cương sinh ra)
-    7. 🔄 Auto Rebirth & Machine Upgrades (Tự chuyển sinh & nâng cấp máy)
-    8. 🏃 WalkSpeed Customizer & Lướt CFrame Siêu Tốc (2x -> 50x)
-    9. 🦘 Infinite Jump, Noclip & Float Mode
-    10. 🛡️ Anti-AFK 24/7 & FPS Booster
+    Cập nhật V2.0:
+    🌊 CHỨC NĂNG MỚI: AUTO MUA TRỨNG TRÊN DÒNG SÔNG THEO ĐỘ HIẾM
+       - Tự động nhận diện và phân loại trứng trôi trên dòng sông/băng chuyền.
+       - Lọc theo độ hiếm: Common, Uncommon, Rare, Epic, Legendary, Mythic, Divine, Secret / Supreme.
+       - Tùy chọn mua theo mốc tối thiểu (Min Rarity) hoặc bật/tắt từng độ hiếm độc lập.
+       - Mua tức thời 0s hold (Infinite Range ProximityPrompt) hoặc tự động dịch chuyển cạnh trứng.
+       - Bắn Remote / ClickDetector mua trứng liên tục với tốc độ cao.
     ===================================================================
 --]]
 
@@ -70,16 +66,35 @@ end)
 
 -- ── State Management ──
 local State = {
+    -- 1. Crash Multiplier Farm
     AutoFarm = false,
     TargetMultiplier = 2.0,
-    MultiplierPresetIndex = 1,
+    MultiplierPresetIndex = 2,
     AutoStartNewEgg = true,
     InstantPrompt = true,
+
+    -- 2. Auto Buy River Eggs by Rarity
+    AutoBuyRiverEggs = false,
+    MinRiverRarityIndex = 5, -- Default Legendary+
+    AutoTpToRiverEgg = false,
+    InfiniteRiverRange = true,
+    BuyRarities = {
+        Common = false,
+        Uncommon = false,
+        Rare = false,
+        Epic = true,
+        Legendary = true,
+        Mythic = true,
+        Divine = true,
+        Secret = true
+    },
     
+    -- 3. Money & Progression
     AutoCollectCash = false,
     AutoRebirth = false,
     AutoUpgradeMachine = false,
     
+    -- 4. Movement & Physics
     SpeedEnabled = false,
     WalkSpeed = 60,
     CFrameBoost = false,
@@ -88,6 +103,7 @@ local State = {
     Noclip = false,
     FloatMode = false,
     
+    -- 5. Protection
     AntiAFK = true,
     FPSBoost = false
 }
@@ -100,6 +116,17 @@ local TargetPresets = {
     {Name = "🔥 Liều Ăn Nhiều (x10.0)", Multiplier = 10.0},
     {Name = "⚡ Siêu Lợi Nhuận (x24.0)", Multiplier = 24.0},
     {Name = "👑 Jackpot (x100.0)", Multiplier = 100.0}
+}
+
+local MinRarityPresets = {
+    {Name = "⚪ Tất cả (Common+)", Rank = 1},
+    {Name = "🟢 Uncommon+", Rank = 2},
+    {Name = "🔵 Rare+", Rank = 3},
+    {Name = "🟣 Epic+", Rank = 4},
+    {Name = "🟠 Legendary+", Rank = 5},
+    {Name = "🔴 Mythic+", Rank = 6},
+    {Name = "🟡 Divine+", Rank = 7},
+    {Name = "🌈 Secret / Supreme Only", Rank = 8}
 }
 
 local CFrameMultipliers = {2, 5, 10, 20, 40}
@@ -196,7 +223,6 @@ end)
 
 -- ── Player Machine / Plot Detector ──
 local function getPlayerMachine()
-    -- Method 1: Check Plot / Base owned by player
     local searchRoots = {"Plots", "Bases", "Tycoons", "Machines", "Incubators"}
     for _, rootName in ipairs(searchRoots) do
         local container = Workspace:FindFirstChild(rootName)
@@ -210,7 +236,6 @@ local function getPlayerMachine()
         end
     end
 
-    -- Method 2: Check Machine closest to player
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if hrp then
@@ -251,8 +276,6 @@ local function getCurrentEggMultiplier(machine)
                 local text = desc.Text
                 if text and #text > 0 then
                     local lower = text:lower()
-                    
-                    -- Pattern: x2.00, x24.0, x100, 2.50x
                     local mVal = lower:match("x%s*([%d%.]+)") or lower:match("([%d%.]+)%s*x")
                     if mVal then
                         local num = tonumber(mVal)
@@ -272,13 +295,109 @@ local function getCurrentEggMultiplier(machine)
         checkContainer(machine)
     end
 
-    -- Also check PlayerGui for floating billboard / HUD egg multiplier
     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
     if pGui then
         checkContainer(pGui)
     end
 
     return maxMult, found
+end
+
+-- ── Evaluate Egg Rarity on River / Conveyor ──
+local function evaluateEggRarity(obj)
+    local bestRank = 1
+    local bestRarityName = "Common"
+
+    local function checkText(str)
+        if not str then return end
+        local lower = str:lower()
+        if lower:find("supreme") or lower:find("cosmic") or lower:find("secret") or lower:find("vô cực") or lower:find("tối thượng") then
+            if 8 > bestRank then bestRank = 8; bestRarityName = "Secret" end
+        elseif lower:find("divine") or lower:find("thần thánh") or lower:find("thiên thần") or lower:find("angel") then
+            if 7 > bestRank then bestRank = 7; bestRarityName = "Divine" end
+        elseif lower:find("mythic") or lower:find("thần thoại") or lower:find("dragon") or lower:find("rồng") then
+            if 6 > bestRank then bestRank = 6; bestRarityName = "Mythic" end
+        elseif lower:find("legendary") or lower:find("huyền thoại") or lower:find("golden") or lower:find("vàng") then
+            if 5 > bestRank then bestRank = 5; bestRarityName = "Legendary" end
+        elseif lower:find("epic") or lower:find("sử thi") or lower:find("tím") then
+            if 4 > bestRank then bestRank = 4; bestRarityName = "Epic" end
+        elseif lower:find("rare") or lower:find("hiếm") or lower:find("lam") then
+            if 3 > bestRank then bestRank = 3; bestRarityName = "Rare" end
+        elseif lower:find("uncommon") or lower:find("lục") then
+            if 2 > bestRank then bestRank = 2; bestRarityName = "Uncommon" end
+        end
+    end
+
+    checkText(obj.Name)
+
+    local prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if prompt then
+        checkText(prompt.ObjectText)
+        checkText(prompt.ActionText)
+    end
+
+    for _, desc in ipairs(obj:GetDescendants()) do
+        if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+            checkText(desc.Text)
+        end
+    end
+
+    return bestRarityName, bestRank
+end
+
+-- ── Scan River / Conveyor Eggs ──
+local function getRiverEggs()
+    local riverEggs = {}
+    local myMachine = getPlayerMachine()
+    local minRank = MinRarityPresets[State.MinRiverRarityIndex].Rank
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if (obj:IsA("Model") or obj:IsA("BasePart")) and not obj:FindFirstAncestorOfClass("Player") then
+            local oName = obj.Name:lower()
+            if oName:find("egg") or oName:find("trứng") then
+                local inMachine = false
+                if myMachine and obj:IsDescendantOf(myMachine) then
+                    inMachine = true
+                end
+
+                if not inMachine then
+                    local prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ProximityPrompt", true))
+                    local cd = obj:FindFirstChildOfClass("ClickDetector") or (obj:IsA("Model") and obj:FindFirstChildWhichIsA("ClickDetector", true))
+
+                    if prompt or cd then
+                        local rarityName, rank = evaluateEggRarity(obj)
+                        local shouldBuy = false
+
+                        if State.BuyRarities[rarityName] then
+                            shouldBuy = true
+                        elseif rank >= minRank then
+                            shouldBuy = true
+                        end
+
+                        if shouldBuy then
+                            local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
+                            if part then
+                                table.insert(riverEggs, {
+                                    Instance = obj,
+                                    Part = part,
+                                    Prompt = prompt,
+                                    ClickDetector = cd,
+                                    Rarity = rarityName,
+                                    Rank = rank
+                                })
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(riverEggs, function(a, b)
+        return a.Rank > b.Rank
+    end)
+
+    return riverEggs
 end
 
 -- ── Movement & Character Physics Engine ──
@@ -346,14 +465,10 @@ task.spawn(function()
                 local currentMult, found = getCurrentEggMultiplier(machine)
                 updateCurrentMultUI(currentMult)
 
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
                 -- Case A: Multiplier reached or exceeded target -> CASHOUT / HATCH!
                 if currentMult >= State.TargetMultiplier then
                     setStatus("💰 ĐẠT MỤC TIÊU x" .. tostring(currentMult) .. "! ĐANG CHỐT LỜI (HATCH)...")
 
-                    -- Method 1: Trigger Hatch / Cashout Remote
                     local hatchRemote = findRemote({"hatch", "cashout", "claim", "collect", "take", "hatchegg", "finish"})
                     if hatchRemote then
                         if hatchRemote:IsA("RemoteEvent") then
@@ -365,7 +480,6 @@ task.spawn(function()
                         end
                     end
 
-                    -- Method 2: Trigger ProximityPrompt on Machine
                     if machine then
                         for _, prompt in ipairs(machine:GetDescendants()) do
                             if prompt:IsA("ProximityPrompt") then
@@ -379,7 +493,6 @@ task.spawn(function()
                         end
                     end
 
-                    -- Method 3: In-game UI Button
                     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
                     if pGui then
                         for _, desc in ipairs(pGui:GetDescendants()) do
@@ -405,7 +518,6 @@ task.spawn(function()
                 if currentMult < State.TargetMultiplier then
                     setStatus("⚡ Hệ số: x" .. string.format("%.2f", currentMult) .. " / Mục tiêu: x" .. tostring(State.TargetMultiplier) .. " -> Đang gạt cần...")
 
-                    -- Method 1: Trigger Lever / Multiply Remote
                     local multRemote = findRemote({"multiply", "pulllever", "lever", "upgrade", "upgradeegg", "cracks", "roll", "risk"})
                     if multRemote then
                         if multRemote:IsA("RemoteEvent") then
@@ -417,7 +529,6 @@ task.spawn(function()
                         end
                     end
 
-                    -- Method 2: Trigger ProximityPrompt for Lever
                     if machine then
                         for _, prompt in ipairs(machine:GetDescendants()) do
                             if prompt:IsA("ProximityPrompt") then
@@ -431,7 +542,6 @@ task.spawn(function()
                         end
                     end
 
-                    -- Method 3: Click UI Lever / Multiply button
                     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
                     if pGui then
                         for _, desc in ipairs(pGui:GetDescendants()) do
@@ -479,7 +589,64 @@ task.spawn(function()
     end
 end)
 
--- 2. Auto Collect Cash & Coins Loop
+-- 2. AUTO BUY RIVER EGGS BY RARITY LOOP
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if State.AutoBuyRiverEggs then
+            pcall(function()
+                local eggs = getRiverEggs()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+                for _, eggData in ipairs(eggs) do
+                    local obj = eggData.Instance
+                    local prompt = eggData.Prompt
+                    local cd = eggData.ClickDetector
+                    local part = eggData.Part
+
+                    if hrp and part then
+                        if State.AutoTpToRiverEgg then
+                            local dist = (part.Position - hrp.Position).Magnitude
+                            if dist > 8 then
+                                hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 3.5, 0))
+                                task.wait(0.08)
+                            end
+                        end
+
+                        if prompt then
+                            if State.InfiniteRiverRange then
+                                prompt.RequiresLineOfSight = false
+                                prompt.HoldDuration = 0
+                                prompt.MaxActivationDistance = 9999
+                            end
+                            triggerPrompt(prompt)
+                        end
+
+                        if cd and fireclickdetector then
+                            fireclickdetector(cd, 0)
+                            fireclickdetector(cd)
+                        end
+
+                        local buyRemote = findRemote({"buyegg", "riverbuy", "purchaseegg", "buyriver", "claimriveregg", "takeegg"})
+                        if buyRemote then
+                            if buyRemote:IsA("RemoteEvent") then
+                                buyRemote:FireServer(obj)
+                                buyRemote:FireServer(obj.Name)
+                            elseif buyRemote:IsA("RemoteFunction") then
+                                buyRemote:InvokeServer(obj)
+                            end
+                        end
+
+                        setStatus("🌊 Đã mua trứng trên sông: " .. obj.Name .. " [" .. eggData.Rarity .. "]")
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- 3. Auto Collect Cash & Coins Loop
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -519,7 +686,7 @@ task.spawn(function()
     end
 end)
 
--- 3. Auto Rebirth Loop
+-- 4. Auto Rebirth Loop
 task.spawn(function()
     while true do
         task.wait(3.5)
@@ -539,7 +706,7 @@ task.spawn(function()
     end
 end)
 
--- 4. Auto Upgrade Machine Loop
+-- 5. Auto Upgrade Machine Loop
 task.spawn(function()
     while true do
         task.wait(3.0)
@@ -585,7 +752,7 @@ MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(255, 215, 0) -- Golden Egg Gold
+MainStroke.Color = Color3.fromRGB(255, 215, 0)
 MainStroke.Thickness = 1.8
 MainStroke.Parent = MainFrame
 
@@ -638,7 +805,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🥚 HATCH OR CRACK HUB 🎰"
+Title.Text = "🥚 HATCH OR CRACK V2.0 🌊"
 Title.TextColor3 = Color3.fromRGB(255, 215, 0)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 15
@@ -750,7 +917,7 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -8, 1, 0)
 StatusLabel.Position = UDim2.new(0, 6, 0, 0)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Sẵn sàng | Hatch or Crack Hub v1.0"
+StatusLabel.Text = "Sẵn sàng | Hatch or Crack Hub v2.0"
 StatusLabel.TextColor3 = Color3.fromRGB(180, 210, 230)
 StatusLabel.Font = Enum.Font.SourceSansItalic
 StatusLabel.TextSize = 12
@@ -770,7 +937,7 @@ Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
 Scroll.ScrollBarThickness = 4
 Scroll.ScrollBarImageColor3 = Color3.fromRGB(255, 215, 0)
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 820)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 1260)
 Scroll.Parent = MainFrame
 
 local UIList = Instance.new("UIListLayout")
@@ -784,7 +951,7 @@ local function createSectionHeader(titleText)
     header.Size = UDim2.new(1, 0, 0, 24)
     header.BackgroundTransparency = 1
     header.Text = " " .. titleText
-    header.TextColor3 = Color3.fromRGB(0, 230, 118) -- Neon Multiplier Green
+    header.TextColor3 = Color3.fromRGB(0, 230, 118)
     header.Font = Enum.Font.SourceSansBold
     header.TextSize = 13
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -907,7 +1074,73 @@ createToggle("⚡ Gạt Cần & Ấp 0s Hold (Instant Prompt)", State.InstantPro
     State.InstantPrompt = val
 end)
 
--- SECTION 2: TIỀN VÀ TIẾN TRÌNH (PROGRESSION)
+-- SECTION 2: AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY)
+createSectionHeader("🌊 AUTO MUA TRỨNG TRÊN SÔNG (RIVER BUY)")
+
+createToggle("🌊 Bật Auto Mua Trứng Dòng Sông", State.AutoBuyRiverEggs, function(val)
+    State.AutoBuyRiverEggs = val
+    setStatus(val and "🌊 Đã BẬT Auto Mua Trứng Trên Sông!" or "⏸️ Đã TẮT Auto Mua Trứng Sông.")
+end)
+
+-- Min Rarity Cycle Button
+local btnMinRarity = Instance.new("TextButton")
+btnMinRarity.Size = UDim2.new(1, -4, 0, 32)
+btnMinRarity.BackgroundColor3 = Color3.fromRGB(28, 38, 54)
+btnMinRarity.Text = "🎯 Mua Từ Mức: [ " .. MinRarityPresets[State.MinRiverRarityIndex].Name .. " ]"
+btnMinRarity.TextColor3 = Color3.fromRGB(0, 230, 255)
+btnMinRarity.Font = Enum.Font.SourceSansBold
+btnMinRarity.TextSize = 12
+btnMinRarity.Parent = Scroll
+local mrCorner = Instance.new("UICorner")
+mrCorner.CornerRadius = UDim.new(0, 6)
+mrCorner.Parent = btnMinRarity
+
+btnMinRarity.MouseButton1Click:Connect(function()
+    State.MinRiverRarityIndex = (State.MinRiverRarityIndex % #MinRarityPresets) + 1
+    local r = MinRarityPresets[State.MinRiverRarityIndex]
+    btnMinRarity.Text = "🎯 Mua Từ Mức: [ " .. r.Name .. " ]"
+    setStatus("🎯 Đã chọn mua trứng từ mốc: " .. r.Name)
+end)
+
+createToggle("🚀 Tự Bay Đến Cạnh Trứng Sông (Auto TP)", State.AutoTpToRiverEgg, function(val)
+    State.AutoTpToRiverEgg = val
+end)
+
+createToggle("⚡ Mua Tầm Xa Không Giới Hạn (Infinite Range)", State.InfiniteRiverRange, function(val)
+    State.InfiniteRiverRange = val
+end)
+
+-- Individual Rarity Checkboxes
+createToggle("⚪ Mua Common / Uncommon", State.BuyRarities.Common, function(val)
+    State.BuyRarities.Common = val
+    State.BuyRarities.Uncommon = val
+end)
+
+createToggle("🔵 Mua Rare (Hiếm)", State.BuyRarities.Rare, function(val)
+    State.BuyRarities.Rare = val
+end)
+
+createToggle("🟣 Mua Epic (Sử Thi)", State.BuyRarities.Epic, function(val)
+    State.BuyRarities.Epic = val
+end)
+
+createToggle("🟠 Mua Legendary (Huyền Thoại)", State.BuyRarities.Legendary, function(val)
+    State.BuyRarities.Legendary = val
+end)
+
+createToggle("🔴 Mua Mythic (Thần Thoại)", State.BuyRarities.Mythic, function(val)
+    State.BuyRarities.Mythic = val
+end)
+
+createToggle("🟡 Mua Divine (Thần Thánh)", State.BuyRarities.Divine, function(val)
+    State.BuyRarities.Divine = val
+end)
+
+createToggle("🌈 Mua Secret / Supreme (Bí Mật)", State.BuyRarities.Secret, function(val)
+    State.BuyRarities.Secret = val
+end)
+
+-- SECTION 3: TIỀN VÀ TIẾN TRÌNH (PROGRESSION)
 createSectionHeader("💰 TIỀN & TIẾN TRÌNH (PROGRESSION)")
 
 createToggle("🧲 Tự Hút Tiền & Phần Thưởng (Coins/Gems)", State.AutoCollectCash, function(val)
@@ -922,7 +1155,7 @@ createToggle("⚡ Tự Nâng Cấp Máy Ấp / Tỷ Lệ May Mắn", State.AutoU
     State.AutoUpgradeMachine = val
 end)
 
--- SECTION 3: TỐC ĐỘ & VẬT LÝ GIAN LẬN
+-- SECTION 4: TỐC ĐỘ & VẬT LÝ GIAN LẬN
 createSectionHeader("🏃 TỐC ĐỘ & VẬT LÝ GIAN LẬN")
 
 createToggle("⚡ Tăng Tốc Độ Chạy (Speed Boost)", State.SpeedEnabled, function(val)
@@ -1004,7 +1237,7 @@ createToggle("🛸 Giữ Bay Lơ Lửng (Float / Hover)", State.FloatMode, funct
     State.FloatMode = val
 end)
 
--- SECTION 4: TREO MÁY & BẢO VỆ
+-- SECTION 5: TREO MÁY & BẢO VỆ
 createSectionHeader("🛡️ TREO MÁY 24/7 & GIẢM LAG")
 
 createToggle("🛡️ Anti-AFK 24/7 (Chống Văng Game)", State.AntiAFK, function(val)
@@ -1031,4 +1264,4 @@ createToggle("🚀 Giảm Đồ Họa Treo Máy (FPS Booster)", State.FPSBoost, 
     end)
 end)
 
-setStatus("Đã khởi tạo thành công Hatch or Crack Hub V1.0!")
+setStatus("Đã khởi tạo thành công Hatch or Crack Hub V2.0!")
