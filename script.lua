@@ -1,17 +1,18 @@
 --[[
     ===================================================================
-    🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.6
+    🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.7
     Game: [👺] Ấp hoặc nứt một quả trứng (by Get it or Lose it)
     Repository: https://github.com/khahuynh963/hatch_or_crack_an_egg.git
     Author: khahuynh963
     Tương thích 100%: Delta Executor (Android & PC), Codex, Wave, Hydrogen, Fluxus.
     
-    TÍNH NĂNG MỚI V2.6:
-    1. 🎒 TỰ ĐỘNG BÁN KHI BALO ĐẦY (FULL BACKPACK AUTO-SELL):
-       - Nhận diện chính xác 100% dung lượng balo từ giao diện game (ví dụ: 471/500, 500/500).
-       - Khi balo đầy (cur >= max), hệ thống tự động kích hoạt chu trình bán tất cả trứng, giải phóng 100% chỗ trống.
-       - Tích hợp trực tiếp vào vòng lặp mua trứng sông: Tự dừng mua để bán sạch balo rồi mới tiếp tục mua trứng xịn, không bỏ lỡ trứng sông.
-       - Hiển thị trực tiếp thông số Balo [472/500] trên thanh thống kê GUI theo thời gian thực.
+    TÍNH NĂNG MỚI V2.7:
+    1. 🎒 TỰ ĐỘNG BÁN KHI BALO ĐẦY (FULL BACKPACK AUTO-SELL - CHUẨN 100%):
+       - Sửa triệt để lỗi tham chiếu ScreenGui nil khiến vòng lặp quét balo bị crash ngầm.
+       - Thuật toán Chấm Điểm Tin Cậy (Candidate Scoring): Ưu tiên tuyệt đối nhãn 471/500 ở góc trên phải.
+       - Tự động xóa mã màu RichText (<font>), dấu phẩy để luôn khớp chính xác dung lượng thực tế.
+       - Cơ chế Vietnamese Accent Stripper loại bỏ mọi vấn đề lệch font chữ có dấu trong game.
+       - Khi balo đầy (cur >= max), lập tức dừng mua trứng để ưu tiên chu trình bán 3 bước thành công 100%.
     2. 🔥 FIX TOÀN DIỆN CHỨC NĂNG BÁN TRỨNG (3-STEP SELL ALL):
        - Tự động nhận diện nút [Bán] trên thanh công cụ trên cùng (hỗ trợ cả ImageButton, TextLabel con, UTF-8 Bán / BÁN).
        - Cơ chế Click đa nền tảng (Multi-Input Click): Kết hợp firesignal, getconnections, VirtualInputManager (tọa độ phần cứng ảo), và VirtualUser.
@@ -35,6 +36,81 @@ pcall(function()
 end)
 
 local LocalPlayer = Players.LocalPlayer
+
+-- Khai báo trước ScreenGui để các hàm helper không bị lỗi nil IsDescendantOf
+local ScreenGui = nil
+
+local function isOurGui(obj)
+    if not obj then return false end
+    if ScreenGui and obj:IsDescendantOf(ScreenGui) then
+        return true
+    end
+    local name = obj.Name
+    if name == "HatchOrCrackRiverHubGui" or name == "HatchOrCrackHubGui" then
+        return true
+    end
+    if obj:FindFirstAncestor("HatchOrCrackRiverHubGui") or obj:FindFirstAncestor("HatchOrCrackHubGui") then
+        return true
+    end
+    return false
+end
+
+-- ── Xử Lý Chuỗi Tiếng Việt (Bỏ Dấu Để So Khớp 100% Chính Xác) ──
+local VIETNAMESE_ACCENTS = {
+    {"á", "a"}, {"à", "a"}, {"ả", "a"}, {"ã", "a"}, {"ạ", "a"},
+    {"â", "a"}, {"ấ", "a"}, {"ầ", "a"}, {"ẩ", "a"}, {"ẫ", "a"}, {"ậ", "a"},
+    {"ă", "a"}, {"ắ", "a"}, {"ằ", "a"}, {"ẳ", "a"}, {"ẵ", "a"}, {"ặ", "a"},
+    {"Á", "a"}, {"À", "a"}, {"Ả", "a"}, {"Ã", "a"}, {"Ạ", "a"},
+    {"Â", "a"}, {"Ấ", "a"}, {"Ầ", "a"}, {"Ẩ", "a"}, {"Ẫ", "a"}, {"Ậ", "a"},
+    {"Ă", "a"}, {"Ắ", "a"}, {"Ằ", "a"}, {"Ẳ", "a"}, {"Ẵ", "a"}, {"Ặ", "a"},
+    {"é", "e"}, {"è", "e"}, {"ẻ", "e"}, {"ẽ", "e"}, {"ẹ", "e"},
+    {"ê", "e"}, {"ế", "e"}, {"ề", "e"}, {"ể", "e"}, {"ễ", "e"}, {"ệ", "e"},
+    {"É", "e"}, {"È", "e"}, {"Ẻ", "e"}, {"Ẽ", "e"}, {"Ẹ", "e"},
+    {"Ê", "e"}, {"Ế", "e"}, {"Ề", "e"}, {"Ể", "e"}, {"Ễ", "e"}, {"Ệ", "e"},
+    {"í", "i"}, {"ì", "i"}, {"ỉ", "i"}, {"ĩ", "i"}, {"ị", "i"},
+    {"Í", "i"}, {"Ì", "i"}, {"Ỉ", "i"}, {"Ĩ", "i"}, {"Ị", "i"},
+    {"ó", "o"}, {"ò", "o"}, {"ỏ", "o"}, {"õ", "o"}, {"ọ", "o"},
+    {"ô", "o"}, {"ố", "o"}, {"ồ", "o"}, {"ổ", "o"}, {"ỗ", "o"}, {"ộ", "o"},
+    {"ơ", "o"}, {"ớ", "o"}, {"ờ", "o"}, {"ở", "o"}, {"ỡ", "o"}, {"ợ", "o"},
+    {"Ó", "o"}, {"Ò", "o"}, {"Ỏ", "o"}, {"Õ", "o"}, {"Ọ", "o"},
+    {"Ô", "o"}, {"Ố", "o"}, {"Ồ", "o"}, {"Ổ", "o"}, {"Ỗ", "o"}, {"Ộ", "o"},
+    {"Ơ", "o"}, {"Ớ", "o"}, {"Ờ", "o"}, {"Ở", "o"}, {"Ỡ", "o"}, {"Ợ", "o"},
+    {"ú", "u"}, {"ù", "u"}, {"ủ", "u"}, {"ũ", "u"}, {"ụ", "u"},
+    {"ư", "u"}, {"ứ", "u"}, {"ừ", "u"}, {"ử", "u"}, {"ữ", "u"}, {"ự", "u"},
+    {"Ú", "u"}, {"Ù", "u"}, {"Ủ", "u"}, {"Ũ", "u"}, {"Ụ", "u"},
+    {"Ư", "u"}, {"Ứ", "u"}, {"Ừ", "u"}, {"Ử", "u"}, {"Ữ", "u"}, {"Ự", "u"},
+    {"ý", "y"}, {"ỳ", "y"}, {"ỷ", "y"}, {"ỹ", "y"}, {"ỵ", "y"},
+    {"Ý", "y"}, {"Ỳ", "y"}, {"Ỷ", "y"}, {"Ỹ", "y"}, {"Ỵ", "y"},
+    {"đ", "d"}, {"Đ", "d"}
+}
+
+local function stripAccents(str)
+    if not str or type(str) ~= "string" then return "" end
+    local clean = str:gsub("<[^>]->", "")
+    for _, pair in ipairs(VIETNAMESE_ACCENTS) do
+        clean = clean:gsub(pair[1], pair[2])
+    end
+    return clean:lower()
+end
+
+-- ── Tìm Nút GuiButton Hợp Lệ Cho Bất Kỳ Object Nào (Hỗ Trợ Sibling, Ancestor, Child) ──
+local function resolveClickableButton(obj)
+    if not obj then return nil end
+    if obj:IsA("GuiButton") then return obj end
+    local btn = obj:FindFirstAncestorWhichIsA("GuiButton")
+    if btn then return btn end
+    if obj.Parent then
+        local sibBtn = obj.Parent:FindFirstChildWhichIsA("GuiButton")
+        if sibBtn then return sibBtn end
+        if obj.Parent.Parent then
+            local pSibBtn = obj.Parent.Parent:FindFirstChildWhichIsA("GuiButton")
+            if pSibBtn then return pSibBtn end
+        end
+    end
+    local childBtn = obj:FindFirstChildWhichIsA("GuiButton")
+    if childBtn then return childBtn end
+    return obj
+end
 
 -- ── Safe GUI Container Helper ──
 local function getGuiContainer()
@@ -83,6 +159,7 @@ local State = {
     MinRiverRarityIndex = 4, -- Default Huyền tuyệt+
     AutoTpToRiverEgg = true,
     AutoReturnToBase = true, -- Tự động quay về chỗ cũ sau khi mua
+    EggStayDuration = 0.75,  -- Thời gian dừng tại trứng (giây) để server kịp nhận diện, không bay về quá nhanh
     InfiniteRiverRange = true,
     AutoCloseShopPopups = true, -- Tự động đóng mọi bảng shop nếu mở nhầm
     BuyRarities = {
@@ -278,25 +355,44 @@ local PROMPT_BLACKLIST = {
 
 -- ── Tự Động Đóng Các Bảng Shop / Popup Bị Mở Nhầm (Siêu nhẹ: Chỉ quét Frame cấp 1 của UI) ──
 local function autoCloseShopPopups()
+    if isSellingActive then return false end
     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not pGui then return false end
 
     local closedAny = false
 
     for _, screen in ipairs(pGui:GetChildren()) do
-        if screen:IsA("ScreenGui") and screen ~= ScreenGui then
+        if screen:IsA("ScreenGui") and not isOurGui(screen) then
             -- Chỉ kiểm tra các Frame / Dialog hiển thị ở cấp trên cùng
             for _, frame in ipairs(screen:GetChildren()) do
                 if (frame:IsA("Frame") or frame:IsA("ImageLabel")) and frame.Visible then
                     local fName = frame.Name:lower()
-                    local isShop = false
 
-                    if fName:find("eggdrop") or fName:find("shop") or fName:find("drop") or fName:find("ticket") then
+                    -- TUYỆT ĐỐI KHÔNG ĐÓNG BẢNG NGƯỜI BÁN TRỨNG HOẶC XÁC NHẬN BÁN
+                    local isSellDialog = false
+                    for _, child in ipairs(frame:GetDescendants()) do
+                        if child:IsA("TextLabel") or child:IsA("TextButton") then
+                            local t = stripAccents(child.Text or "")
+                            if t:find("nguoi ban trung") or t:find("ban tat ca") or t:find("ban chung di")
+                               or t:find("thi truong trung") or t:find("egg seller") then
+                                isSellDialog = true
+                                break
+                            end
+                        end
+                    end
+                    if isSellDialog then
+                        continue
+                    end
+
+                    local isShop = false
+                    if fName:find("eggdrop") or fName:find("goldendrop") or (fName:find("drop") and not fName:find("egg")) then
+                        isShop = true
+                    elseif fName:find("shop") or fName:find("ticket") then
                         isShop = true
                     else
                         for _, child in ipairs(frame:GetChildren()) do
                             if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Visible then
-                                local txt = child.Text:lower()
+                                local txt = (child.Text or ""):lower():gsub("<[^>]->", "")
                                 if txt:find("egg drop shop") or txt:find("golden drop") or txt:find("need 5 tickets") 
                                    or txt:find("ticket a drop") or txt:find("more tickets") then
                                     isShop = true
@@ -637,9 +733,9 @@ local function getRiverEggs()
     return riverEggs
 end
 
--- ── Thực hiện mua 1 quả trứng duy nhất (Chỉ bay 1 lần, tuyệt đối không gọi remote shop) ──
+-- ── Thực hiện mua 1 quả trứng duy nhất (Bay theo trứng, chờ máy chủ nhận diện, không về quá nhanh) ──
 local function buySingleRiverEgg(eggData, isManualTest)
-    if isBuyingActive then return false end
+    if isBuyingActive or isSellingActive then return false end
     isBuyingActive = true
 
     local obj = eggData.Instance
@@ -654,73 +750,100 @@ local function buySingleRiverEgg(eggData, isManualTest)
         return false
     end
 
-    markEggProcessed(obj)
-
     local originalCFrame = hrp.CFrame
     local didTeleport = false
 
-    -- 1. DỊCH CHUYỂN ĐÚNG 1 LẦN
+    -- 1. DỊCH CHUYỂN ĐẾN TRỨNG
     if State.AutoTpToRiverEgg or isManualTest then
-        setStatus("🚀 Bay đến trứng sông: " .. obj.Name .. " [" .. eggData.RarityName .. "] (1 Lần)")
-        
+        setStatus("🚀 Bay đến trứng sông: " .. obj.Name .. " [" .. eggData.RarityName .. "]")
         hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 3.2, 0))
+        hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 2.5, 0))
         didTeleport = true
-        task.wait(0.12)
     else
         setStatus("⚡ Mua từ xa: " .. obj.Name .. " [" .. eggData.RarityName .. "]")
     end
 
-    -- 2. KÍCH HOẠT PROXIMITY PROMPT (Cơ chế thu thập chính quy trên sông)
-    if prompt then
-        if State.InfiniteRiverRange then
-            prompt.RequiresLineOfSight = false
-            prompt.HoldDuration = 0
-            prompt.MaxActivationDistance = 99999
+    -- 2. DUY TRÌ VỊ TRÍ TẠI TRỨNG (Giúp Server nhận diện đủ thời gian, chống bay về quá nhanh)
+    local stayDuration = State.EggStayDuration or 0.75
+    local t0 = os.clock()
+    local bought = false
+
+    while (os.clock() - t0 < stayDuration) do
+        -- Nếu trứng đã biến mất khỏi Workspace = đã nhặt/mua thành công!
+        if not obj or not obj.Parent or not part or not part.Parent or not part:IsDescendantOf(Workspace) then
+            bought = true
+            break
         end
-        triggerPrompt(prompt)
-    end
 
-    -- 3. KÍCH HOẠT CLICK DETECTOR
-    if cd and fireclickdetector then
-        fireclickdetector(cd, 0)
-        fireclickdetector(cd)
-    end
+        -- Nếu trứng đang trôi trên sông/băng chuyền, giữ nhân vật bay bám sát theo quả trứng
+        if didTeleport and hrp and part and part.Parent then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.CFrame = CFrame.new(part.Position + Vector3.new(0, 2.5, 0))
+        end
 
-    -- 4. BẮN REMOTE EVENT MUA TRỨNG SÔNG CHUYÊN BIỆT (TUYỆT ĐỐI KHÔNG BẮN REMOTE 'buyegg' CỦA SHOP)
-    local riverRemote = findRemote({"buyriveregg", "riveregg", "claimriveregg", "buyriver", "claimbeltegg", "takebeltegg", "beltegg", "buybelt", "takeegg"})
-    if riverRemote then
-        pcall(function()
-            if riverRemote:IsA("RemoteEvent") then
-                riverRemote:FireServer(obj)
-            elseif riverRemote:IsA("RemoteFunction") then
-                riverRemote:InvokeServer(obj)
+        -- Kích hoạt ProximityPrompt
+        if prompt and prompt.Parent then
+            if State.InfiniteRiverRange then
+                prompt.RequiresLineOfSight = false
+                prompt.HoldDuration = 0
+                prompt.MaxActivationDistance = 99999
             end
-        end)
+            triggerPrompt(prompt)
+        end
+
+        -- Kích hoạt ClickDetector
+        if cd and fireclickdetector then
+            pcall(function() fireclickdetector(cd, 0) end)
+            pcall(function() fireclickdetector(cd) end)
+        end
+
+        -- Kích hoạt Remote sông chuyên biệt
+        local riverRemote = findRemote({"buyriveregg", "riveregg", "claimriveregg", "buyriver", "claimbeltegg", "takebeltegg", "beltegg", "buybelt", "takeegg"})
+        if riverRemote then
+            pcall(function()
+                if riverRemote:IsA("RemoteEvent") then
+                    riverRemote:FireServer(obj)
+                elseif riverRemote:IsA("RemoteFunction") then
+                    riverRemote:InvokeServer(obj)
+                end
+            end)
+        end
+
+        task.wait(0.12)
     end
 
-    task.wait(0.12)
+    -- Kiểm tra lần cuối xem trứng đã biến mất chưa
+    if not obj or not obj.Parent or not part or not part.Parent or not part:IsDescendantOf(Workspace) then
+        bought = true
+    end
 
-    -- 5. TỰ ĐỘNG ĐÓNG POPUP SHOP NẾU VÔ TÌNH BẬT MỞ
+    if bought then
+        markEggProcessed(obj)
+        PurchasedCount = PurchasedCount + 1
+        setStatus("✅ ĐÃ MUA THÀNH CÔNG: " .. obj.Name .. " [" .. eggData.RarityName .. "]")
+    else
+        -- Trứng chưa kịp mua (ping cao hoặc chưa đủ tiền), chỉ tạm hoãn 3.5s để thử lại lần sau
+        ProcessedRiverEggs[obj] = os.clock() - 86.5
+        setStatus("⚠️ Chưa kịp nhận trứng: " .. obj.Name .. " (đang thử lại...)")
+    end
+
+    -- 3. TỰ ĐỘNG ĐÓNG POPUP SHOP NẾU VÔ TÌNH BẬT MỞ
     if State.AutoCloseShopPopups then
         pcall(function()
             autoCloseShopPopups()
         end)
     end
 
-    -- 6. QUAY VỀ VỊ TRÍ CŨ NẾU BẬT AUTO RETURN
-    if didTeleport and State.AutoReturnToBase and originalCFrame then
-        setStatus("🔙 Đã mua xong! Đang quay lại vị trí ban đầu...")
+    -- 4. QUAY VỀ VỊ TRÍ CŨ NẾU BẬT AUTO RETURN
+    if didTeleport and State.AutoReturnToBase and originalCFrame and hrp then
         task.wait(0.08)
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.CFrame = originalCFrame
     end
 
-    setStatus("✅ ĐÃ MUA THÀNH CÔNG: " .. obj.Name .. " [" .. eggData.RarityName .. "] (Đã ghi nhớ, không dịch chuyển lại)")
-    
-    task.wait(0.25)
+    task.wait(0.15)
     isBuyingActive = false
-    return true
+    return bought
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -730,27 +853,116 @@ end
 local function getBackpackStatus()
     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
     if pGui then
+        -- 1. Ưu tiên kiểm tra thông báo/cảnh báo "Balo đầy" trên màn hình
         for _, desc in ipairs(pGui:GetDescendants()) do
-            if desc:IsA("TextLabel") and not desc:IsDescendantOf(ScreenGui) then
-                local t = desc.Text
-                if t and t:find("/") then
-                    -- Quét chuỗi dạng 471/500 hoặc 500/500
-                    local curStr, maxStr = t:match("(%d+)%s*/%s*(%d+)")
+            if desc:IsA("TextLabel") and desc.Visible and not isOurGui(desc) then
+                local txt = stripAccents(desc.Text or "")
+                if (txt:find("balo") and txt:find("day")) or (txt:find("tui") and txt:find("day"))
+                   or txt:find("backpack full") or txt:find("inventory full")
+                   or txt:find("storage full") or txt:find("bag full") then
+                    return true, 500, 500, "ĐẦY!"
+                end
+            end
+        end
+
+        -- 2. Quét tìm tất cả các TextLabel có định dạng X/Y (ví dụ: 471/500, 500/500) và tính điểm tin cậy
+        local bestCandidate = nil
+        local highestScore = -1
+
+        for _, desc in ipairs(pGui:GetDescendants()) do
+            if desc:IsA("TextLabel") and not isOurGui(desc) then
+                local rawText = desc.Text or ""
+                local clean = rawText:gsub("<[^>]->", ""):gsub(",", ""):gsub("%.", "")
+                if clean:find("/") then
+                    local curStr, maxStr = clean:match("(%d+)%s*/%s*(%d+)")
                     if curStr and maxStr then
                         local cur = tonumber(curStr)
                         local max = tonumber(maxStr)
-                        -- Dung lượng balo trứng hợp lệ (từ 10 đến 500.000)
-                        if cur and max and max >= 10 and max <= 500000 and cur <= max + 50 then
-                            local isFull = (cur >= max)
-                            return isFull, cur, max, tostring(cur) .. "/" .. tostring(max)
+                        if cur and max and max >= 5 and max <= 10000000 and cur <= max + 100 then
+                            local score = 0
+                            -- Ưu tiên 1: Text thuần chỉ là số và dấu / (ví dụ: "471/500" như trong ảnh game)
+                            if clean:match("^%s*%d+%s*/%s*%d+%s*$") then
+                                score = score + 120
+                            end
+                            -- Ưu tiên 2: Vị trí góc trên bên phải màn hình (như ô hồng/đen trong ảnh game)
+                            pcall(function()
+                                local pos = desc.AbsolutePosition
+                                if pos.X > 350 and pos.Y < 350 then
+                                    score = score + 60
+                                end
+                            end)
+                            -- Ưu tiên 3: Tên hoặc Parent liên quan đến Balo / Trứng / Dung lượng
+                            local pName = ((desc.Name or "") .. " " .. (desc.Parent and desc.Parent.Name or "")):lower()
+                            if pName:find("egg") or pName:find("bag") or pName:find("cap") or pName:find("inv") 
+                               or pName:find("storage") or pName:find("amount") or pName:find("count") then
+                                score = score + 50
+                            end
+                            -- Ưu tiên 4: Hiển thị trên màn hình
+                            if desc.Visible then
+                                score = score + 25
+                            end
+                            -- Ưu tiên 5: Sức chứa lớn (>= 50)
+                            if max >= 50 then
+                                score = score + 20
+                            end
+
+                            if score > highestScore then
+                                highestScore = score
+                                bestCandidate = { cur = cur, max = max, desc = desc }
+                            end
                         end
                     end
                 end
             end
         end
+
+        if bestCandidate then
+            local cur = bestCandidate.cur
+            local max = bestCandidate.max
+            local isFull = (cur >= max)
+            return isFull, cur, max, tostring(cur) .. "/" .. tostring(max)
+        end
+
+        -- 3. Quét trường hợp hai nhãn tách biệt: nhãn 1 là "471", nhãn 2 là "/500"
+        for _, desc in ipairs(pGui:GetDescendants()) do
+            if desc:IsA("TextLabel") and not isOurGui(desc) then
+                local t = (desc.Text or ""):gsub("<[^>]->", ""):gsub("%s+", ""):gsub(",", "")
+                if t:find("^/%d+$") then
+                    local maxVal = tonumber(t:match("^/(%d+)$"))
+                    if maxVal and maxVal >= 5 and maxVal <= 10000000 then
+                        local parent = desc.Parent
+                        if parent then
+                            for _, sib in ipairs(parent:GetChildren()) do
+                                if sib ~= desc and sib:IsA("TextLabel") then
+                                    local curVal = tonumber((sib.Text or ""):gsub("<[^>]->", ""):gsub("%s+", ""):gsub(",", ""))
+                                    if curVal and curVal <= maxVal + 100 then
+                                        local isFull = (curVal >= maxVal)
+                                        return isFull, curVal, maxVal, tostring(curVal) .. "/" .. tostring(maxVal)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 4. Quét qua leaderstats hoặc thuộc tính của Player
+        local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+        if leaderstats then
+            local eggStat = leaderstats:FindFirstChild("Eggs") or leaderstats:FindFirstChild("Trứng") or leaderstats:FindFirstChild("Egg")
+            local maxStat = leaderstats:FindFirstChild("MaxEggs") or leaderstats:FindFirstChild("Max") or leaderstats:FindFirstChild("Capacity")
+            if eggStat and maxStat and eggStat:IsA("ValueObject") and maxStat:IsA("ValueObject") then
+                local c = tonumber(eggStat.Value)
+                local m = tonumber(maxStat.Value)
+                if c and m and m > 0 then
+                    return (c >= m), c, m, tostring(c) .. "/" .. tostring(m)
+                end
+            end
+        end
     end
 
-    -- Fallback: kiểm tra Tool trong Backpack
+    -- 5. Fallback: đếm Tool trong Backpack
     local bp = LocalPlayer:FindFirstChild("Backpack")
     local count = bp and #bp:GetChildren() or 0
     return false, count, 0, tostring(count)
@@ -764,9 +976,9 @@ local function clickGuiObject(obj)
     if not obj then return false end
     local clicked = false
 
-    -- 1. Tìm GuiButton để bắn các sự kiện Lua
-    local btn = obj:IsA("GuiButton") and obj or obj:FindFirstAncestorWhichIsA("GuiButton")
-    if btn then
+    -- 1. Tìm GuiButton chính xác để bắn các sự kiện Lua
+    local btn = resolveClickableButton(obj)
+    if btn and btn:IsA("GuiButton") then
         pcall(function()
             if firesignal then
                 firesignal(btn.MouseButton1Down)
@@ -795,8 +1007,8 @@ local function clickGuiObject(obj)
         end)
     end
 
-    -- 2. VirtualInputManager (Tạo sự kiện Click chuột / Chạm tay phần cứng vào tâm đối tượng)
-    local target = (obj:IsA("GuiObject") and obj) or btn
+    -- 2. VirtualInputManager & VirtualUser (Mô phỏng chuột / chạm tay phần cứng tại tâm nút)
+    local target = (btn and btn:IsA("GuiObject") and btn) or (obj:IsA("GuiObject") and obj)
     if target and target.AbsolutePosition and target.AbsoluteSize then
         local x = target.AbsolutePosition.X + (target.AbsoluteSize.X / 2)
         local y = target.AbsolutePosition.Y + (target.AbsoluteSize.Y / 2)
@@ -804,14 +1016,22 @@ local function clickGuiObject(obj)
             pcall(function()
                 if VirtualInputManager then
                     VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-                    task.wait(0.02)
+                    task.wait(0.04)
                     VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
                     clicked = true
                 end
             end)
             pcall(function()
+                if VirtualInputManager then
+                    VirtualInputManager:SendTouchEvent(1, 0, x, y)
+                    task.wait(0.04)
+                    VirtualInputManager:SendTouchEvent(1, 2, x, y)
+                    clicked = true
+                end
+            end)
+            pcall(function()
                 VirtualUser:Button1Down(Vector2.new(x, y))
-                task.wait(0.02)
+                task.wait(0.04)
                 VirtualUser:Button1Up(Vector2.new(x, y))
                 clicked = true
             end)
@@ -827,22 +1047,20 @@ end
 
 local function matchesSellButtonText(str)
     if not str or type(str) ~= "string" then return false end
-    local clean = str:gsub("%s+", "")
-    local sLower = clean:lower()
+    local clean = stripAccents(str):gsub("%s+", ""):lower()
     
     -- Chống nhầm các nút chức năng khác trên TopBar
-    if sLower:find("cửahàng") or sLower:find("cuahang") or sLower:find("táisinh") or sLower:find("taisinh")
-       or sLower:find("mụclục") or sLower:find("mucluc") or sLower:find("thẻđèo") or sLower:find("thedeo")
-       or sLower:find("pass") or sLower:find("shop") or sLower:find("cart") or sLower:find("drop")
-       or sLower:find("kiểm tra") or sLower:find("kiem tra") then
+    if clean:find("cuahang") or clean:find("shop") or clean:find("taisinh") or clean:find("rebirth")
+       or clean:find("mucluc") or clean:find("index") or clean:find("thedeo") or clean:find("pass")
+       or clean:find("cart") or clean:find("drop") or clean:find("kiemtra") or clean:find("tatca")
+       or clean:find("trainotrung") or clean:find("cottruyen") then
         return false
     end
     
     -- Nhận diện nút [Bán] / [BÁN] / [bán]
-    if #clean <= 12 then
-        if clean == "Bán" or clean == "BÁN" or clean == "bán"
-           or clean:find("Bán") or clean:find("BÁN") or clean:find("bán")
-           or sLower == "ban" or sLower == "sell" or sLower == "sellbutton" or sLower == "btn_sell" then
+    if #clean <= 15 then
+        if clean == "ban" or clean == "sell" or clean:find("^ban$") or clean:find("^sell$")
+           or clean == "btn_sell" or clean == "sellbutton" or clean == "sellbtn" then
             return true
         end
     end
@@ -851,9 +1069,13 @@ end
 
 local function matchesSellAllOption(str)
     if not str or type(str) ~= "string" then return false end
-    local s = str:lower()
-    if str:find("Bán tất cả") or str:find("BÁN TẤT CẢ") or str:find("bán tất cả")
-       or str:find("Bán Tất Cả") or s:find("ban tat ca") or s:find("sell all") then
+    local s = stripAccents(str):lower()
+    -- Tuyệt đối không chọn bán thú/động vật hoặc rời khỏi
+    if s:find("dong vat") or s:find("animal") or s:find("pet") or s:find("roi khoi") or s:find("leave") then
+        return false
+    end
+    -- Khớp "bán tất cả trứng" hoặc "bán tất cả" hoặc "sell all eggs" hoặc "sell all"
+    if (s:find("ban tat ca") or s:find("sell all")) and (s:find("trung") or s:find("egg") or not s:find("dong vat")) then
         return true
     end
     return false
@@ -861,10 +1083,13 @@ end
 
 local function matchesConfirmSell(str)
     if not str or type(str) ~= "string" then return false end
-    local s = str:lower()
-    if str:find("Có, bán") or str:find("CÓ, BÁN") or str:find("có, bán")
-       or str:find("bán chúng đi") or str:find("BÁN CHÚNG ĐI") or str:find("Bán chúng đi")
-       or s:find("co, ban") or s:find("ban chung di") or s:find("yes, sell") then
+    local s = stripAccents(str):lower()
+    -- Không chọn hủy hoặc giữ lại
+    if s:find("khong") or s:find("giu") or s:find("no") or s:find("cancel") or s:find("keep") then
+        return false
+    end
+    -- Khớp "có, bán chúng đi" hoặc "có bán chúng đi" hoặc "bán chúng đi" hoặc "yes, sell"
+    if s:find("co, ban") or s:find("co ban") or s:find("ban chung di") or s:find("yes") or s:find("sell them") then
         return true
     end
     return false
@@ -875,11 +1100,21 @@ local function findTopBarSellButton()
     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not pGui then return nil end
 
+    local topCandidate = nil
+
     -- 1. Quét tìm TextLabel/TextButton có chữ "Bán"
     for _, desc in ipairs(pGui:GetDescendants()) do
-        if not desc:IsDescendantOf(ScreenGui) and (desc:IsA("TextLabel") or desc:IsA("TextButton")) then
+        if not isOurGui(desc) and (desc:IsA("TextLabel") or desc:IsA("TextButton")) then
             if matchesSellButtonText(desc.Text) then
-                local btn = desc:IsA("GuiButton") and desc or desc:FindFirstAncestorWhichIsA("GuiButton") or desc
+                local btn = resolveClickableButton(desc)
+                -- Ưu tiên nút ở khu vực thanh công cụ phía trên (Y < 150)
+                pcall(function()
+                    if desc.AbsolutePosition and desc.AbsolutePosition.Y < 150 then
+                        topCandidate = btn or desc
+                    end
+                end)
+                if topCandidate then return topCandidate end
+                if not btn then btn = desc end
                 return btn
             end
         end
@@ -887,9 +1122,9 @@ local function findTopBarSellButton()
 
     -- 2. Quét tìm theo tên Button
     for _, desc in ipairs(pGui:GetDescendants()) do
-        if not desc:IsDescendantOf(ScreenGui) and desc:IsA("GuiButton") then
+        if not isOurGui(desc) and desc:IsA("GuiButton") then
             local n = desc.Name:lower()
-            if (n == "sell" or n == "sellbutton" or n == "btn_sell" or n == "sellbtn" or n == "ban")
+            if (n == "sell" or n == "sellbutton" or n == "btn_sell" or n == "sellbtn" or n == "ban" or n == "sellall")
                and not n:find("shop") and not n:find("drop") and not n:find("robux") and not n:find("pass") then
                 return desc
             end
@@ -904,19 +1139,19 @@ local function findSellAllOptionButton()
     local pGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not pGui then return nil end
 
-    -- 1. Tìm theo Text hiển thị
+    -- 1. Tìm theo Text hiển thị trong toàn bộ PlayerGui
     for _, desc in ipairs(pGui:GetDescendants()) do
-        if not desc:IsDescendantOf(ScreenGui) and (desc:IsA("TextLabel") or desc:IsA("TextButton")) then
+        if not isOurGui(desc) and (desc:IsA("TextLabel") or desc:IsA("TextButton")) then
             if matchesSellAllOption(desc.Text) then
-                local btn = desc:IsA("GuiButton") and desc or desc:FindFirstAncestorWhichIsA("GuiButton") or desc
-                return btn
+                local btn = resolveClickableButton(desc)
+                return btn or desc
             end
         end
     end
 
     -- 2. Tìm theo tên Option2 / Choice2 trong Dialog
     for _, desc in ipairs(pGui:GetDescendants()) do
-        if not desc:IsDescendantOf(ScreenGui) and desc:IsA("GuiButton") and desc.Visible then
+        if not isOurGui(desc) and desc:IsA("GuiButton") and desc.Visible then
             local n = desc.Name:lower()
             if n == "option2" or n == "choice2" or n == "button2" or n == "opt2" or n == "2" then
                 return desc
@@ -934,17 +1169,17 @@ local function findConfirmSellButton()
 
     -- 1. Tìm theo Text hiển thị xác nhận
     for _, desc in ipairs(pGui:GetDescendants()) do
-        if not desc:IsDescendantOf(ScreenGui) and (desc:IsA("TextLabel") or desc:IsA("TextButton")) then
+        if not isOurGui(desc) and (desc:IsA("TextLabel") or desc:IsA("TextButton")) then
             if matchesConfirmSell(desc.Text) then
-                local btn = desc:IsA("GuiButton") and desc or desc:FindFirstAncestorWhichIsA("GuiButton") or desc
-                return btn
+                local btn = resolveClickableButton(desc)
+                return btn or desc
             end
         end
     end
 
     -- 2. Tìm theo tên Option1 / Choice1 / Confirm
     for _, desc in ipairs(pGui:GetDescendants()) do
-        if not desc:IsDescendantOf(ScreenGui) and desc:IsA("GuiButton") and desc.Visible then
+        if not isOurGui(desc) and desc:IsA("GuiButton") and desc.Visible then
             local n = desc.Name:lower()
             if n == "option1" or n == "choice1" or n == "button1" or n == "opt1" or n == "confirm" or n == "yes" or n == "1" then
                 return desc
@@ -959,68 +1194,124 @@ end
 local function executeSellAllFlow()
     if isSellingActive then return false end
     isSellingActive = true
+    isBuyingActive = false -- Tuyệt đối tạm dừng mua để ưu tiên bán 100%
 
     local completed = false
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local originalCFrame = hrp and hrp.CFrame
+    local didTeleportToMarket = false
 
     pcall(function()
-        -- ── BƯỚC 1: Mở menu Người bán trứng (Bấm chữ [Bán] trên TopBar) ──
-        setStatus("💰 [1/3] Đang tìm và bấm nút [Bán] trên thanh công cụ...")
-        local topBtn = findTopBarSellButton()
-        if topBtn then
-            clickGuiObject(topBtn)
-        else
-            -- Dự phòng: Quét ProximityPrompt của Thị trường trứng
+        -- ── BƯỚC 1: Mở menu Người bán trứng ──
+        -- Kiểm tra xem bảng Người bán trứng đã mở sẵn trên màn hình chưa (tránh bấm nút TopBar làm ĐÓNG ngược lại)
+        local opt2Btn = findSellAllOptionButton()
+        if not opt2Btn then
+            setStatus("💰 [1/3] Đang tìm và bấm nút [Bán] trên thanh công cụ...")
+            local topBtn = findTopBarSellButton()
+            if topBtn then
+                clickGuiObject(topBtn)
+                task.wait(0.35)
+                opt2Btn = findSellAllOptionButton()
+            end
+        end
+
+        -- Dự phòng 1: Nếu bấm nút [Bán] chưa mở được bảng thoại, quét quầy Thị Trường Trứng trong Workspace
+        if not opt2Btn then
+            setStatus("💰 [1/3] Đang tìm quầy Thị trường trứng để kích hoạt...")
+            local marketPrompt = nil
             for _, prompt in ipairs(Workspace:GetDescendants()) do
                 if prompt:IsA("ProximityPrompt") then
-                    local act = (prompt.ActionText or ""):lower()
-                    local obj = (prompt.ObjectText or ""):lower()
-                    if (act:find("sell") or act:find("bán") or obj:find("market") or obj:find("thị trường"))
+                    local act = stripAccents(prompt.ActionText or ""):lower()
+                    local obj = stripAccents(prompt.ObjectText or ""):lower()
+                    if (act:find("sell") or act:find("ban") or obj:find("market") or obj:find("thi truong") or obj:find("trung") or obj:find("egg"))
                        and not act:find("buy") and not act:find("drop") and not act:find("ticket") and not act:find("shop") then
-                        triggerPrompt(prompt)
+                        marketPrompt = prompt
                         break
                     end
                 end
+            end
+
+            if marketPrompt and marketPrompt.Parent then
+                local promptPart = marketPrompt.Parent:IsA("BasePart") and marketPrompt.Parent or marketPrompt.Parent:FindFirstChildWhichIsA("BasePart")
+                if promptPart and hrp then
+                    setStatus("🚀 Dịch chuyển đến trước quầy Người bán trứng...")
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.CFrame = promptPart.CFrame + Vector3.new(0, 2, 3.5)
+                    didTeleportToMarket = true
+                    task.wait(0.25)
+                end
+                triggerPrompt(marketPrompt)
+                task.wait(0.4)
+                opt2Btn = findSellAllOptionButton()
             end
         end
 
         -- ── BƯỚC 2: Chờ bảng "Người bán trứng" và chọn [2. Bán tất cả trứng] ──
         setStatus("💰 [2/3] Đang chờ bảng Người bán trứng và chọn [2. Bán tất cả trứng]...")
-        local opt2Btn = nil
         local t0 = os.clock()
-        while (os.clock() - t0 < 2.5) do
+        while (os.clock() - t0 < 3.0) do
             opt2Btn = findSellAllOptionButton()
             if opt2Btn then break end
             task.wait(0.1)
         end
 
         if not opt2Btn then
-            -- Thử bấm lại nút [Bán] nếu game nhận trễ
-            topBtn = findTopBarSellButton()
+            local topBtn = findTopBarSellButton()
             if topBtn then
                 clickGuiObject(topBtn)
-                task.wait(0.3)
+                task.wait(0.35)
                 opt2Btn = findSellAllOptionButton()
             end
         end
 
         if opt2Btn then
             clickGuiObject(opt2Btn)
-            task.wait(0.2)
+            -- Bổ sung mô phỏng phím số 2 (Phím tắt tùy chọn 2 trong thoại Roblox)
+            pcall(function()
+                if VirtualInputManager then
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
+                    task.wait(0.04)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
+                end
+            end)
+            task.wait(0.35)
         end
 
         -- ── BƯỚC 3: Chờ bảng xác nhận và chọn [1. Có, bán chúng đi] ──
         setStatus("💰 [3/3] Đang chờ bảng xác nhận và chọn [1. Có, bán chúng đi]...")
         local confirmBtn = nil
         t0 = os.clock()
-        while (os.clock() - t0 < 2.5) do
+        while (os.clock() - t0 < 3.0) do
             confirmBtn = findConfirmSellButton()
             if confirmBtn then break end
             task.wait(0.1)
         end
 
+        if not confirmBtn and opt2Btn then
+            clickGuiObject(opt2Btn)
+            pcall(function()
+                if VirtualInputManager then
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Two, false, game)
+                    task.wait(0.04)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Two, false, game)
+                end
+            end)
+            task.wait(0.35)
+            confirmBtn = findConfirmSellButton()
+        end
+
         if confirmBtn then
             clickGuiObject(confirmBtn)
-            task.wait(0.25)
+            -- Bổ sung mô phỏng phím số 1 (Phím tắt tùy chọn 1 trong thoại Roblox)
+            pcall(function()
+                if VirtualInputManager then
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
+                    task.wait(0.04)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+                end
+            end)
+            task.wait(0.3)
             completed = true
         end
 
@@ -1040,11 +1331,27 @@ local function executeSellAllFlow()
             end)
         end
 
-        SoldCount = SoldCount + 1
-        setStatus("✅ ĐÃ BÁN TẤT CẢ TRỨNG THÀNH CÔNG! (Bán ➔ Bán tất cả ➔ Có, bán chúng đi)")
+        -- Quay về vị trí ban đầu nếu đã bay đến quầy thị trường
+        if didTeleportToMarket and State.AutoReturnToBase and originalCFrame and hrp then
+            task.wait(0.1)
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.CFrame = originalCFrame
+        end
+
+        if completed then
+            SoldCount = SoldCount + 1
+            setStatus("✅ ĐÃ BÁN TẤT CẢ TRỨNG THÀNH CÔNG! Đã dọn sạch balo.")
+            pcall(function()
+                if updateEggCountUI then
+                    updateEggCountUI(lastCount >= 0 and lastCount or 0, lastBest, PurchasedCount, SoldCount)
+                end
+            end)
+        else
+            setStatus("⚠️ Đã thử kích hoạt chu trình bán. Đang kiểm tra lại...")
+        end
     end)
 
-    task.wait(0.3)
+    task.wait(0.35)
     isSellingActive = false
     return completed
 end
@@ -1168,16 +1475,17 @@ end
 -- ⚙️ BACKGROUND LOOPS
 -- ═══════════════════════════════════════════════════════════
 
--- 1. Auto Buy River Eggs Loop (Tần suất tối ưu 0.6s - Siêu nhẹ, không giật lag)
+-- 1. Auto Buy River Eggs Loop (Tần suất tối ưu 0.5s - Siêu nhẹ, không giật lag)
 task.spawn(function()
     while true do
-        task.wait(0.6)
-        if State.AutoBuyRiverEggs and not isBuyingActive then
+        task.wait(0.5)
+        if State.AutoBuyRiverEggs and not isBuyingActive and not isSellingActive then
             pcall(function()
                 -- Kiểm tra Balo nếu bật Auto Bán Khi Balo Đầy: tạm dừng mua để bán trước, tránh mất thời gian khi balo đầy
                 if State.AutoSellWhenFull then
                     local isFull, cur, max, bpStr = getBackpackStatus()
-                    if isFull and max > 0 then
+                    if isFull then
+                        isBuyingActive = false
                         setStatus("🎒 Balo đã đầy (" .. bpStr .. ")! Tạm dừng mua để bán sạch trứng trước...")
                         executeSellAllFlow()
                         task.wait(1.0)
@@ -1200,13 +1508,14 @@ task.spawn(function()
                     end
                 end
 
-                if targetEgg then
+                if targetEgg and not isSellingActive then
                     buySingleRiverEgg(targetEgg, false)
 
                     -- Kiểm tra lại sau khi mua xem balo có vừa đầy không
-                    if State.AutoSellWhenFull then
+                    if State.AutoSellWhenFull and not isSellingActive then
                         local isFullPost, curPost, maxPost, bpStrPost = getBackpackStatus()
-                        if isFullPost and maxPost > 0 then
+                        if isFullPost then
+                            isBuyingActive = false
                             setStatus("🎒 Balo vừa đầy (" .. bpStrPost .. ")! Tự động bán tất cả trứng...")
                             executeSellAllFlow()
                         end
@@ -1217,15 +1526,16 @@ task.spawn(function()
     end
 end)
 
--- 2. Auto Sell When Backpack Full Loop (Kiểm tra độc lập mỗi 1.2s - Balo đầy là bán ngay)
+-- 2. Auto Sell When Backpack Full Loop (Kiểm tra độc lập mỗi 0.7s - Balo đầy là bán ngay)
 task.spawn(function()
     while true do
-        task.wait(1.2)
-        if State.AutoSellWhenFull and not isSellingActive and not isBuyingActive then
+        task.wait(0.7)
+        if State.AutoSellWhenFull and not isSellingActive then
             pcall(function()
                 local isFull, cur, max, bpStr = getBackpackStatus()
-                if isFull and max > 0 then
-                    setStatus("🎒 Balo đã đầy (" .. bpStr .. ")! Tự động kích hoạt chu trình bán tất cả trứng...")
+                if isFull then
+                    isBuyingActive = false
+                    setStatus("🎒 Balo đã đầy (" .. bpStr .. ")! Tự động kích hoạt bán tất cả trứng...")
                     executeSellAllFlow()
                 end
             end)
@@ -1511,8 +1821,11 @@ StatsLabel.Parent = StatsBanner
 
 local lastCount, lastBest, lastBought, lastSold, lastBp = -1, "", -1, -1, ""
 updateEggCountUI = function(count, bestEgg, boughtTotal, soldTotal)
-    local _, curBp, maxBp, bpStr = getBackpackStatus()
-    local displayBp = maxBp > 0 and bpStr or tostring(curBp)
+    local isFull, curBp, maxBp, bpStr = getBackpackStatus()
+    local displayBp = bpStr or tostring(curBp)
+    if isFull then
+        displayBp = displayBp .. " ⚠️ĐẦY"
+    end
 
     if count == lastCount and bestEgg == lastBest and boughtTotal == lastBought and soldTotal == lastSold and displayBp == lastBp then
         return
@@ -1521,14 +1834,15 @@ updateEggCountUI = function(count, bestEgg, boughtTotal, soldTotal)
     StatsLabel.Text = "🌊 Sông: [" .. tostring(count) .. "] | 🎒 Balo: [" .. tostring(displayBp) .. "] | Mua: [" .. tostring(boughtTotal) .. "] | Bán: [" .. tostring(soldTotal) .. "]"
 end
 
--- Tự động cập nhật chỉ số Balo trên thanh thống kê mỗi 1.5s
+-- Tự động cập nhật chỉ số Balo trên thanh thống kê mỗi 1.2s
 task.spawn(function()
     while true do
-        task.wait(1.5)
+        task.wait(1.2)
         pcall(function()
             if updateEggCountUI and StatsLabel then
-                local _, _, _, bpStr = getBackpackStatus()
-                if bpStr ~= lastBp then
+                local isFull, _, _, bpStr = getBackpackStatus()
+                local checkStr = (bpStr or "") .. (isFull and " ⚠️ĐẦY" or "")
+                if checkStr ~= lastBp then
                     updateEggCountUI(lastCount >= 0 and lastCount or 0, lastBest, PurchasedCount, SoldCount)
                 end
             end
@@ -1722,6 +2036,28 @@ end)
 createToggle("🔙 Tự Quay Về Chỗ Cũ Sau Khi Mua", State.AutoReturnToBase, function(val)
     State.AutoReturnToBase = val
     setStatus(val and "🔙 Đã BẬT: Mua xong sẽ tự động bay về chỗ cũ." or "Đã TẮT tự quay về.")
+end)
+
+-- Nút điều chỉnh thời gian dừng tại trứng (Khắc phục triệt để lỗi nhảy về quá nhanh)
+local stayPresets = {0.5, 0.75, 1.0, 1.25, 1.5}
+local currentStayIdx = 2
+local btnStayDuration = Instance.new("TextButton")
+btnStayDuration.Size = UDim2.new(1, -4, 0, 32)
+btnStayDuration.BackgroundColor3 = Color3.fromRGB(24, 36, 52)
+btnStayDuration.Text = "⏱️ Dừng Tại Trứng: [ " .. tostring(State.EggStayDuration) .. "s ] (Chống về nhanh)"
+btnStayDuration.TextColor3 = Color3.fromRGB(0, 255, 180)
+btnStayDuration.Font = Enum.Font.SourceSansBold
+btnStayDuration.TextSize = 12
+btnStayDuration.Parent = Scroll
+local sdCorner = Instance.new("UICorner")
+sdCorner.CornerRadius = UDim.new(0, 6)
+sdCorner.Parent = btnStayDuration
+
+btnStayDuration.MouseButton1Click:Connect(function()
+    currentStayIdx = (currentStayIdx % #stayPresets) + 1
+    State.EggStayDuration = stayPresets[currentStayIdx]
+    btnStayDuration.Text = "⏱️ Dừng Tại Trứng: [ " .. tostring(State.EggStayDuration) .. "s ] (Chống về nhanh)"
+    setStatus("⏱️ Đã đặt thời gian dừng tại trứng: " .. tostring(State.EggStayDuration) .. "s")
 end)
 
 createToggle("⚡ Mua Tầm Xa Vô Hạn (Infinite Range)", State.InfiniteRiverRange, function(val)

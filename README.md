@@ -1,4 +1,4 @@
-# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.6
+# 🌊 HATCH OR CRACK AN EGG! - AUTO MUA SÔNG & BÁN TRỨNG V2.7
 
 Script chuyên biệt tự động quét **mua trứng trôi trên dòng sông**, **tự động bán sạch trứng khi balo đầy**, và **bán tất cả trứng theo quy trình chuẩn game 3 bước** cho tựa game **[👺] Ấp hoặc nứt một quả trứng** (Hatch or Crack an Egg) trên Roblox, được phát triển bởi nhóm **Get it or Lose it**.
 
@@ -22,21 +22,20 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/khahuynh963/hatch_or_
 
 ---
 
-## 🎒 Tính Năng Mới V2.6: Tự Động Bán Khi Balo Đầy (Full Backpack Auto-Sell)
+## 🎒 Tính Năng Nâng Cấp V2.7: Khắc Phục Lỗi Nhảy Quá Nhanh & Tối Ưu Bán Trứng
 
-Giải quyết triệt để vấn đề đầy balo làm gián đoạn quá trình cày cuốc và gom trứng xịn:
+Phiên bản V2.7 khắc phục toàn diện 2 vấn đề lớn được người chơi phản hồi:
 
-1. **📊 Nhận Diện Dung Lượng Balo Thời Gian Thực**:
-   * Tự động quét và đọc chính xác thông số balo hiển thị trên góc phải màn hình game (dạng `471/500`, `472/500`, `500/500`).
-   * Hiển thị trực tiếp thông số này lên thanh trạng thái GUI: `🎒 Balo: [471/500]` giúp bạn dễ dàng theo dõi.
-2. **⚡ Balo Đầy Tự Động Kích Hoạt Bán Trứng**:
-   * Ngay khi số lượng trứng trong balo chạm ngưỡng tối đa (`cur >= max`, ví dụ 500/500), script sẽ tự động kích hoạt chu trình bán tất cả để giải phóng 100% dung lượng balo lấy tiền mặt.
-3. **🤝 Tích Hợp Đồng Bộ Với Auto Mua Sông**:
-   * Trước mỗi lần mua trứng sông, script sẽ kiểm tra balo. Nếu balo đã đầy, nó sẽ **tạm dừng mua để bán sạch balo trước**, sau đó mới tiếp tục gom trứng xịn. Tránh hoàn toàn việc bay đến quả trứng sông nhưng không nhặt được vì đầy túi!
-4. **🔥 Khắc Phục Toàn Diện Lỗi Nút Bán (Multi-Input Click & Polling)**:
-   * **Nhận diện chính xác nút [Bán]**: Tìm kiếm TextLabel mang chữ "Bán" / "BÁN" chuẩn UTF-8 nằm bên trong `ImageButton` trên thanh TopBar.
-   * **Cơ chế Click Đa Nền Tảng (Multi-Input)**: Kết hợp đồng thời `firesignal`, `getconnections`, và **`VirtualInputManager`** (mô phỏng thao tác click chuột / chạm tay phần cứng tại đúng tọa độ tâm của nút trên màn hình).
-   * **Hệ thống Polling thông minh**: Chờ bảng thoại "Người bán trứng" xuất hiện tối đa 2.5s cho bước 2 (`2. Bán tất cả trứng`) và bước 3 (`1. Có, bán chúng đi`), kèm cơ chế tự động bấm lại nếu game bị lag.
+1. **⏱️ Khắc Phục Lỗi Mua Trứng "Nhảy Đến Rồi Nhảy Về Quá Nhanh"**:
+   * **Bám sát theo quả trứng**: Khi trứng đang trôi trên băng chuyền sông, nhân vật liên tục điều chỉnh tọa độ bay theo sát quả trứng (cự ly 2.5 studs).
+   * **Duy trì thời gian dừng tại trứng (`EggStayDuration`)**: Cho phép server đủ thời gian nhận diện và xử lý ProximityPrompt (mặc định 0.75s, có nút bấm trên giao diện để đổi `0.5s ➔ 0.75s ➔ 1.0s ➔ 1.25s ➔ 1.5s`).
+   * **Kiểm tra trạng thái nhặt thực tế**: Chỉ khi quả trứng thực sự biến mất khỏi Workspace (đã mua thành công) thì nhân vật mới bay về chỗ cũ! Nếu chưa mua kịp do ping, script chỉ tạm hoãn 3.5s để thử lại ngay sau đó thay vì bỏ lỡ.
+2. **🔥 Khắc Phục Triệt Để Chức Năng Bán Trứng Khi Balo Đầy (Sell All Eggs)**:
+   * **Sửa lỗi biến ScreenGui nil**: Loại bỏ hoàn toàn lỗi crash ngầm trong các hàm kiểm tra balo và quét nút bấm.
+   * **Chống đóng ngược menu**: Kiểm tra trước nếu bảng thoại "Người bán trứng" đã mở sẵn thì không bấm nút TopBar nữa (tránh tình trạng bấm nút làm đóng menu).
+   * **Dự phòng dịch chuyển đến quầy Thị Trường Trứng**: Nếu nút [Bán] trên TopBar không mở được thoại, script tự động dịch chuyển nhân vật đến trước quầy bán trứng trong map và kích hoạt ProximityPrompt trực tiếp.
+   * **Mô phỏng phím số 2 và phím số 1**: Kết hợp cả click chuột/chạm tay cảm ứng (`VirtualInputManager`, `VirtualUser`, `firesignal`) cùng phím số `2` (Bán tất cả) và `1` (Xác nhận Có, bán chúng đi).
+   * **Khóa chống chen ngang**: Khi đang thực hiện chu trình bán, vòng lặp mua trứng sông lập tức tạm dừng để nhường quyền ưu tiên 100% cho bán trứng.
 
 ---
 
